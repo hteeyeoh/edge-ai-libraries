@@ -112,10 +112,13 @@ ENV FASTAPI_ENV=production
 
 # Install runtime dependency for opencv
 RUN apt-get update && apt-get install --no-install-recommends --fix-missing -y \
+    curl \
     libgl1-mesa-glx \
     libglib2.0-0
 
 COPY --from=builder-base $SETUP_PATH $SETUP_PATH
+
+RUN curl -fsSL https://ollama.com/install.sh | sh -
 
 RUN sed -i 's/tokenizer.pad_token_id = model.config.eos_token_id/tokenizer.pad_token_id = tokenizer.eos_token_id/' \
     /opt/projsetup/.venv/lib/python3.11/site-packages/langchain_huggingface/llms/huggingface_pipeline.py

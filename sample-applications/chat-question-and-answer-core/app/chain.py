@@ -1,5 +1,5 @@
 from .config import Settings
-from .utils import login_to_huggingface, download_huggingface_model, convert_model
+from .utils import login_to_huggingface, download_huggingface_model, convert_model, download_ollama_model
 from .document import load_file_document
 from .logger import logger
 from langchain_community.vectorstores import FAISS
@@ -11,6 +11,7 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_ollama.llms import OllamaLLM
 import os
 import pandas as pd
 
@@ -30,12 +31,24 @@ if not RUN_TEST:
     # Download convert the model to openvino optimized
     download_huggingface_model(config.EMBEDDING_MODEL_ID, config.CACHE_DIR)
     download_huggingface_model(config.RERANKER_MODEL_ID, config.CACHE_DIR)
-    download_huggingface_model(config.LLM_MODEL_ID, config.CACHE_DIR)
+
+    # Handle LLM backend framework
+    if config.LLM_BACKEND == "openvino":
+        download_huggingface_model(config.LLM_MODEL_ID, config.CACHE_DIR)
+
+    elif config.LLM_BACKEND == "ollama":
+        download_ollama_model(config.LLM_MODEL_ID)
+
+    else:
+        logger.error(f"Unsupported LLM backend: {config.LLM_BACKEND}. Please set it to 'openvino' or 'ollama'.")
+        raise ValueError(f"Unsupported LLM backend: {config.LLM_BACKEND}")
 
     # Convert to openvino IR
     convert_model(config.EMBEDDING_MODEL_ID, config.CACHE_DIR, "embedding")
     convert_model(config.RERANKER_MODEL_ID, config.CACHE_DIR, "reranker")
-    convert_model(config.LLM_MODEL_ID, config.CACHE_DIR, "llm")
+
+    if config.LLM_BACKEND == "openvino":
+        convert_model(config.LLM_MODEL_ID, config.CACHE_DIR, "llm")
 
     # Define RAG prompt
     template = """
@@ -71,23 +84,29 @@ if not RUN_TEST:
     )
 
     # Initialize LLM
-    llm = HuggingFacePipeline.from_model_id(
-        model_id=f"{config.CACHE_DIR}/{config.LLM_MODEL_ID}",
-        task="text-generation",
-        backend="openvino",
-        model_kwargs={
-            "device": config.LLM_DEVICE,
-            "ov_config": {
-                "PERFORMANCE_HINT": "LATENCY",
-                "NUM_STREAMS": "1",
-                "CACHE_DIR": f"{config.CACHE_DIR}/{config.LLM_MODEL_ID}/model_cache",
+    if config.LLM_BACKEND == "openvino":
+        llm = HuggingFacePipeline.from_model_id(
+            model_id=f"{config.CACHE_DIR}/{config.LLM_MODEL_ID}",
+            task="text-generation",
+            backend="openvino",
+            model_kwargs={
+                "device": config.LLM_DEVICE,
+                "ov_config": {
+                    "PERFORMANCE_HINT": "LATENCY",
+                    "NUM_STREAMS": "1",
+                    "CACHE_DIR": f"{config.CACHE_DIR}/{config.LLM_MODEL_ID}/model_cache",
+                },
+                "trust_remote_code": True,
             },
-            "trust_remote_code": True,
-        },
-        pipeline_kwargs={"max_new_tokens": config.MAX_TOKENS},
-    )
-    if llm.pipeline.tokenizer.eos_token_id:
-        llm.pipeline.tokenizer.pad_token_id = llm.pipeline.tokenizer.eos_token_id
+            pipeline_kwargs={"max_new_tokens": config.MAX_TOKENS},
+        )
+
+        if llm.pipeline.tokenizer.eos_token_id:
+            llm.pipeline.tokenizer.pad_token_id = llm.pipeline.tokenizer.eos_token_id
+
+    elif config.LLM_BACKEND == "ollama":
+        llm = OllamaLLM(model=config.LLM_MODEL_ID)
+
 else:
     logger.info("Bypassing to mock these functions because RUN_TEST is set to 'True' to run pytest unit test.")
 
