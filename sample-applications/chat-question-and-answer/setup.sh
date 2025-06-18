@@ -102,6 +102,10 @@ setup_inference() {
                         python3 export_model.py text_generation --source_model $LLM_MODEL --weight-format $WEIGHT_FORMAT --config_file_path models/config.json --model_repository_path models --target_device $DEVICE --cache_size $OVMS_CACHE_SIZE --overwrite_models
                         cd ..
                         ;;
+                ollama)
+                        export ENDPOINT_URL=http://ollama-service/v1
+                        export COMPOSE_PROFILES=OLLAMA
+                        ;;
                 tgi)
                         export ENDPOINT_URL=http://text-generation/v1
                         export COMPOSE_PROFILES=TGI
@@ -150,7 +154,7 @@ if [[ -n "$1" && -n "$2" ]]; then
                         *)
                                 echo "Invalid argument: $arg"
                                 echo "Usage: setup.sh llm=<Model Server> embed=<Embedding Service>"
-                                echo "Model Server options: VLLM or TGI or OVMS"
+                                echo "Model Server options: VLLM, TGI, OVMS or OLLAMA"
                                 echo "Embedding Service options: TEI or OVMS"
                                 ;;
                 esac
@@ -160,6 +164,6 @@ if [[ -n "$1" && -n "$2" ]]; then
 else
         echo "Please provide the service to start: specify Model server and Embedding service"
         echo "Usage: setup.sh llm=<Model Server> embed=<Embedding Service>"
-        echo "Model Server options: VLLM or TGI or OVMS"
+        echo "Model Server options: VLLM, TGI, OVMS or OLLAMA"
         echo "Embedding Service options: TEI or OVMS"
 fi

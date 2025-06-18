@@ -11,4 +11,4 @@ deployment_package/
 chart/
 .git/
 .env
-
+data/
