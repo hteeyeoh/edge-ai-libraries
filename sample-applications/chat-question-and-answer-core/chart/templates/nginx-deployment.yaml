@@ -14,10 +14,10 @@ spec:
     spec:
       containers:
         - name: nginx
-          image: nginx:1.27.1 
+          image: nginxinc/nginx-unprivileged:1.27.4
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - containerPort: 80
+            - containerPort: 8102
           volumeMounts:
             - name: nginx-config
               mountPath: /etc/nginx/conf.d
@@ -36,7 +36,7 @@ spec:
   ports:
     - protocol: TCP
       port: 80
-      targetPort: 80
+      targetPort: 8102
       nodePort: {{ .Values.global.UI_NODEPORT }}
   type: NodePort
 ---
@@ -47,8 +47,8 @@ metadata:
 data:
   nginx.conf: |
     server {
-      listen 80;
-      listen [::]:80;
+      listen 8102;
+      listen [::]:8102;
 
       client_max_body_size 500M;
       proxy_read_timeout 300;
