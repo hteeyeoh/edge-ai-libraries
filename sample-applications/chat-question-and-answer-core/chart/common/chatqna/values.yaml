@@ -1,6 +1,6 @@
 image:
   registry: "amr-fm-registry.caas.intel.com/esh-user/"
-  uiTag: "core_nginx"
+  uiTag: "core_nginx_1"
   pullPolicy: IfNotPresent
 
 global:
@@ -11,5 +11,5 @@ global:
 
 uiService:
   type: ClusterIP
-  port: 80
+  port: 8102
   targetPort: 8102
