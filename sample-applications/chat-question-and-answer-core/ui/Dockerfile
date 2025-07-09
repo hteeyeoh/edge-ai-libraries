@@ -27,7 +27,6 @@ COPY --from=vite-app /user/app/dist /usr/share/nginx/html
 COPY ./env.sh /docker-entrypoint.d/env.sh
 # COPY ./nginx.conf /etc/nginx/conf.d/default.conf
 COPY ./nginx.conf /etc/nginx/nginx.conf
-COPY ./chatqna.conf /etc/nginx/conf.d/default.conf
 
 USER root
 RUN chmod +x /docker-entrypoint.d/env.sh
