@@ -40,28 +40,6 @@ spec:
               value: "{{ .Values.global.no_proxy }}"
             - name: HF_ACCESS_TOKEN
               value: "{{ .Values.global.huggingface.apiToken }}"
-            - name: EMBEDDING_MODEL_ID
-              value: "{{ .Values.global.EMBEDDING_MODEL }}"
-            - name: RERANKER_MODEL_ID
-              value: "{{ .Values.global.RERANKER_MODEL }}"
-            - name: LLM_MODEL_ID
-              value: "{{ .Values.global.LLM_MODEL }}"
-            - name: EMBEDDING_DEVICE
-              value: {{ .Values.global.EMBEDDING_DEVICE }}
-            - name: RERANKER_DEVICE
-              value: {{ .Values.global.RERANKER_DEVICE }}
-            - name: LLM_DEVICE
-              value: {{ .Values.global.LLM_DEVICE }}
-            - name: MAX_TOKENS
-              value: "{{ .Values.chatqna.env.MAX_TOKENS }}"
-            - name: ENABLE_RERANK
-              value: "{{ .Values.chatqna.env.ENABLE_RERANK }}"
-            - name: CACHE_DIR
-              value: "{{ .Values.chatqna.env.CACHE_DIR }}"
-            - name: HF_DATASETS_CACHE
-              value: "{{ .Values.chatqna.env.HF_DATASETS_CACHE }}"
-            - name: TMP_FILE_PATH
-              value: "{{ .Values.chatqna.env.TMP_FILE_PATH }}"
           {{ if .Values.gpu.enabled }}
           resources:
             requests:
@@ -77,10 +55,16 @@ spec:
           volumeMounts:
             - name: model-cache
               mountPath: "{{ .Values.global.model_cache_path }}"
+            - name: model-config
+              mountPath: /tmp/model_config/config.yaml
+              subPath: config.yaml
       volumes:
         - name: model-cache
           persistentVolumeClaim:
             claimName: chatqna-pvc
+        - name: model-config
+          configMap:
+            name: model-config
       {{- if .Values.gpu.enabled }}
         - name: dri-device
           hostPath:
