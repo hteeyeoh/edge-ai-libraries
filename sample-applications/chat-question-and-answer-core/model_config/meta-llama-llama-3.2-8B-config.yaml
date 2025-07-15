@@ -2,7 +2,7 @@ model_settings:
   EMBEDDING_MODEL_ID: "BAAI/bge-small-en-v1.5"
   RERANKER_MODEL_ID: "BAAI/bge-reranker-base"
   LLM_MODEL_ID: "meta-llama/Llama-3.1-8B-Instruct"
-  PROMPT_TEMPLATE: "
+  PROMPT_TEMPLATE: >
     <|start_header_id|>system<|end_header_id|>
     Use the following pieces of context from retrieved
     dataset to answer the question. Do not make up an answer if there is no
@@ -18,8 +18,6 @@ model_settings:
     <|eot_id|>
 
     <|start_header_id|>assistant<|end_header_id|>
-    "
-
 device_settings:
   EMBEDDING_DEVICE: "CPU"
   RERANKER_DEVICE: "CPU"

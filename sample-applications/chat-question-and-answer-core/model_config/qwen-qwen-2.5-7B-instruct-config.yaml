@@ -2,7 +2,7 @@ model_settings:
   EMBEDDING_MODEL_ID: "BAAI/bge-small-en-v1.5"
   RERANKER_MODEL_ID: "BAAI/bge-reranker-base"
   LLM_MODEL_ID: "Qwen/Qwen2.5-7B-Instruct"
-  PROMPT_TEMPLATE: "
+  PROMPT_TEMPLATE: >
     <|im_start|>
     system:
     Use the following pieces of context from retrieved
@@ -18,9 +18,8 @@ model_settings:
     {question}
     <|im_end|>
 
-    <|im_start|>assistant
-    "
-
+    <|im_start|>
+    assistant:
 device_settings:
   EMBEDDING_DEVICE: "CPU"
   RERANKER_DEVICE: "CPU"
