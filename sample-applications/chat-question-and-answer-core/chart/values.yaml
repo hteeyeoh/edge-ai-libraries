@@ -1,7 +1,7 @@
 image:
-  registry: "intel/"
-  backendTag: "core_1.2.1"
-  backendGpuTag: "core_gpu_1.2.1"
+  registry: "amr-fm-registry.caas.intel.com/esh-user/"
+  backendTag: "core_config_1"
+  backendGpuTag: "core_gpu_config_1"
   pullPolicy: IfNotPresent
 
 global:
@@ -10,11 +10,27 @@ global:
   no_proxy:
   huggingface:
     apiToken:
+  EMBEDDING_MODEL:
+  RERANKER_MODEL:
+  LLM_MODEL:
+  # The prompt template is used to format the input to the LLM.
+  # Start with folded-styles(>) to avoid new lines in the multi-lines template."
+  # For example:
+  # PROMPT_TEMPLATE: >
+  #   You are a helpful assistant...
+  # Leave it empty to use the default prompt template provided by the application.
+  PROMPT_TEMPLATE:
+  MAX_TOKENS: 1024
+  #If the system has an integrated GPU, its id is always 0 (GPU.0). The GPU is an alias for GPU.0. If a system has multiple GPUs (for example, an integrated and a discrete Intel GPU) It is done by specifying GPU.1,GPU.0
+  EMBEDDING_DEVICE: "CPU"
+  RERANKER_DEVICE: "CPU"
+  LLM_DEVICE: "CPU"
   model_cache_path: "/tmp/model_cache"
   UI_NODEPORT:
   pvc:
     size: 60Gi
   keeppvc: false # true  to persist models across multiple deployments
+
 chatqna:
   name: chatqna-core
   service:
@@ -26,6 +42,9 @@ chatqna:
       port: 8888
     initialDelaySeconds: 30
     periodSeconds: 30
+
+configmap:
+  enabled: true  # Set to `false` to use default model config in the application
 
 gpu:
   enabled: false
