@@ -4,29 +4,51 @@ image:
   backendGpuTag: "core_gpu_config_1"
   pullPolicy: IfNotPresent
 
+configmap:
+  enabled: true  # Set to `false` to use default model config in the application
+
 global:
   http_proxy:
   https_proxy:
   no_proxy:
+
   huggingface:
     apiToken:
+
   EMBEDDING_MODEL:
   RERANKER_MODEL:
   LLM_MODEL:
+
   # The prompt template is used to format the input to the LLM.
-  # Start with folded-styles(>) to avoid new lines in the multi-lines template."
-  # For example:
+  # Start with folded-style (>) to avoid new lines in the multi-line template.
+  # Example:
   # PROMPT_TEMPLATE: >
-  #   You are a helpful assistant...
-  # Leave it empty to use the default prompt template provided by the application.
+  #   system:
+  #   Use the following pieces of context from retrieved
+  #   dataset to answer the question. Do not make up an answer if there is no
+  #   context provided to help answer it.
+  #
+  #   context:
+  #   {context}
+  #
+  #   user:
+  #   {question}
+  #
+  #   assistant:
   PROMPT_TEMPLATE:
+
   MAX_TOKENS: 1024
-  #If the system has an integrated GPU, its id is always 0 (GPU.0). The GPU is an alias for GPU.0. If a system has multiple GPUs (for example, an integrated and a discrete Intel GPU) It is done by specifying GPU.1,GPU.0
+
+  # If the system has an integrated GPU, its id is always 0 (GPU.0).
+  # The GPU is an alias for GPU.0. If a system has multiple GPUs (e.g., integrated and discrete),
+  # specify them like: GPU.1, GPU.0
   EMBEDDING_DEVICE: "CPU"
   RERANKER_DEVICE: "CPU"
   LLM_DEVICE: "CPU"
+
   model_cache_path: "/tmp/model_cache"
   UI_NODEPORT:
+
   pvc:
     size: 60Gi
   keeppvc: false # true  to persist models across multiple deployments
@@ -42,9 +64,6 @@ chatqna:
       port: 8888
     initialDelaySeconds: 30
     periodSeconds: 30
-
-configmap:
-  enabled: true  # Set to `false` to use default model config in the application
 
 gpu:
   enabled: false
