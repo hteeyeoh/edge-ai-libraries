@@ -9,3 +9,4 @@ coverage
 .coverage-report/
 *.lock
 !poetry.lock
+.vscode

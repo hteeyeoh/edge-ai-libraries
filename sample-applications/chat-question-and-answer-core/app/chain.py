@@ -19,12 +19,9 @@ vectorstore = None
 logger.info(f"Chatqna-Core application started with config: {config}")
 
 # The RUN_TEST flag is used to bypass the model download and conversion steps during pytest unit testing.
-# By default, the flag is set to 'false', enabling the model download and conversion process in a normal run.
-# To skip these steps, set the flag to 'true'.
-# Check environment flag
-RUN_TEST = os.getenv('RUN_TEST', False)
-
-if not RUN_TEST:
+# If RUN_TEST is set to "True", the model download and conversion steps are skipped.
+# This flag is set in the conftest.py file before running the tests.
+if os.getenv("RUN_TEST") != "True":
     # login huggingface
     login_to_huggingface(config.HF_ACCESS_TOKEN)
 

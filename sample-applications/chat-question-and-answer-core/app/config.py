@@ -64,8 +64,15 @@ class Settings(BaseSettings):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        config_file = self._MODEL_CONFIG_PATH if os.path.isfile(self._MODEL_CONFIG_PATH) else self._DEFAULT_MODEL_CONFIG
 
+        # The RUN_TEST flag is used to bypass the model config loading during pytest unit testing.
+        # If RUN_TEST is set to "True", the model config loading is skipped.
+        # This flag is set in the conftest.py file before running the tests.
+        if os.getenv("RUN_TEST") == "True":
+            print("INFO - Skipping model config loading in test mode.")
+            return
+
+        config_file = self._MODEL_CONFIG_PATH if os.path.isfile(self._MODEL_CONFIG_PATH) else self._DEFAULT_MODEL_CONFIG
 
         if config_file == self._MODEL_CONFIG_PATH:
             print(f"INFO - Model configuration yaml from user found in {config_file}. Loading configuration from {config_file}")
