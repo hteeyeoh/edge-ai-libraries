@@ -21,7 +21,7 @@ from .chain import (
 from .document import validate_document, save_document
 from .utils import get_available_devices, get_device_property
 
-app = FastAPI(root_path="/v1/chatqna")
+app = FastAPI(title="Chat Question and Answer Core", root_path="/v1/chatqna")
 
 config = Settings()
 
