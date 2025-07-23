@@ -39,7 +39,7 @@ export MINIO_ROOT_USER=${MINIO_USER:-dummy_user}
 export MINIO_ROOT_PASSWORD=${MINIO_PASSWD:-dummy_321}
 
 # Setup no_proxy
-export no_proxy=${no_proxy},minio-server,data-store,vllm-service,text-generation,tei-embedding-service,ovms-service,reranker,openvino-embedding
+export no_proxy=${no_proxy},${OTLP_ENDPOINT},minio-server,data-store,vllm-service,text-generation,tei-embedding-service,ovms-service,reranker,openvino-embedding
 
 # ReRanker Config
 export RERANKER_ENDPOINT=http://reranker/rerank
@@ -48,6 +48,10 @@ export RERANKER_ENDPOINT=http://reranker/rerank
 export OTLP_SERVICE_NAME=chatqna
 export OTLP_SERVICE_ENV=chatqna
 export OTEL_SERVICE_VERSION=1.0.0
+if [[ -n "$OTLP_ENDPOINT" ]]; then
+  export REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+fi
+
 
 # VLLM
 export TENSOR_PARALLEL_SIZE=1
