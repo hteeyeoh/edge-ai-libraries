@@ -15,10 +15,10 @@ class TestSanity:
     # Configurations
     HOST = get_ip_address()
     DOCUMENT_URL = f"http://{HOST}:8000/documents"
-    STEAM_LOG_URL = f"http://{HOST}:8100/stream_log"
+    STEAM_LOG_URL = f"http://{HOST}:8100/chat/completions"
     DATA_STORE_URL = f"http://{HOST}:8200/data"
 
-    HELM_STREAM_LOG = f"http://{HOST}:8080/stream_log"
+    HELM_chat/completions = f"http://{HOST}:8080/chat/completions"
     HELM_DATA_STORE_URL = f"http://{HOST}:8005/data"
 
     # Testdata

@@ -91,7 +91,7 @@ def check_chatqna_core_status():
 def check_chatqna_helm_status():        
     model_started = False
     ip = get_ip_address()
-    completion_url = f"http://{ip}:8080/stream_log"
+    completion_url = f"http://{ip}:8080/chat/completions"
     body = {"input":"test"}
     must_end = time.time() + 50000
     print("Checking helm server status..")
