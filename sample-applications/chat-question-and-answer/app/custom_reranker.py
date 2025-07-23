@@ -47,19 +47,31 @@ class CustomReranker:
             "raw_scores": False,
         }
 
-        response = requests.post(
-            url=f"{self.reranking_endpoint}",
-            json=request_body,
-            headers={"Content-Type": "application/json"},
-        )
-        if response.status_code == 200:
-            logging.info(response.json())
+        try:
+            response = requests.post(
+                url=f"{self.reranking_endpoint}",
+                json=request_body,
+                headers={"Content-Type": "application/json"},
+                timeout=30  # Add timeout to prevent hanging
+            )
+            if response.status_code == 200:
+                logging.info(response.json())
 
-            res = response.json()
-            maxRank = max(res, key=lambda x: x["score"])
-            return {
-                "question": retrieved_docs["question"],
-                "context": [retrieved_docs["context"][maxRank["index"]]],
-            }
-        else:
-            raise Exception(f"Error: {response.status_code}, {response.text}")
+                res = response.json()
+                maxRank = max(res, key=lambda x: x["score"])
+                return {
+                    "question": retrieved_docs["question"],
+                    "context": [retrieved_docs["context"][maxRank["index"]]],
+                }
+            else:
+                logging.error(f"Reranker error: {response.status_code}, {response.text}")
+                # Return original context if reranking fails
+                return retrieved_docs
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Reranker request failed: {str(e)}")
+            # Return original context if reranking fails
+            return retrieved_docs
+        except Exception as e:
+            logging.error(f"Unexpected error in reranker: {str(e)}")
+            # Return original context if reranking fails
+            return retrieved_docs

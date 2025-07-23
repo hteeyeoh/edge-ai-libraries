@@ -97,17 +97,17 @@ async def get_llm_model():
         raise HTTPException(status_code=503, detail="LLM_MODEL is not set")
     return {"status": "success", "llm_model": llm_model}
 
-@app.post("/stream_log", response_class=StreamingResponse)
+@app.post("/chat/completions", response_class=StreamingResponse)
 async def query_chain(payload: QuestionRequest):
     """
-    Handles POST requests to the /stream_log endpoint.
+    Handles POST requests to the /chat/completions endpoint.
 
     This endpoint receives a question in the form of a JSON payload, validates the input,
     and returns a streaming response with the processed chunks of the question text.
 
     Args:
         payload (QuestionRequest): The request payload containing the input question text
-        MaX_TOKENS (int): The maximum number of tokens to process. Defaults to 512 if not provided.
+        MAX_TOKENS (int): The maximum number of tokens to process. Defaults to 512 if not provided.
         or set to 4096 if provided.
 
     Returns:
@@ -116,13 +116,27 @@ async def query_chain(payload: QuestionRequest):
     Raises:
         HTTPException: If the input question text is empty or not provided, a 422 status code is returned.
     """
-    question_text = payload.input
-    max_tokens = payload.MAX_TOKENS if payload.MAX_TOKENS else 512
-    if max_tokens > 1024:
-        raise HTTPException(status_code=422, detail="MAX_TOKENS cannot be greater than 1024")
-    if not question_text or question_text == "":
-        raise HTTPException(status_code=422, detail="Question is required")
-    return StreamingResponse(process_chunks(question_text,max_tokens), media_type="text/event-stream")
+    try:
+        question_text = payload.input
+        max_tokens = payload.MAX_TOKENS if payload.MAX_TOKENS else 512
+        if max_tokens > 1024:
+            raise HTTPException(status_code=422, detail="MAX_TOKENS cannot be greater than 1024")
+        if not question_text or question_text == "":
+            raise HTTPException(status_code=422, detail="Question is required")
+        
+        # Additional validation
+        if len(question_text.strip()) == 0:
+            raise HTTPException(status_code=422, detail="Question cannot be empty or whitespace only")
+            
+        return StreamingResponse(process_chunks(question_text, max_tokens), media_type="text/event-stream")
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        # Log unexpected errors and return a 500 error
+        import logging
+        logging.error(f"Unexpected error in query_chain: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 FastAPIInstrumentor.instrument_app(app)
 
