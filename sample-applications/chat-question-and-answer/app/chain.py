@@ -135,21 +135,30 @@ async def process_chunks(question_text, max_tokens):
             
         if LLM_BACKEND in ["vllm", "unknown"]:
             seed_value = None
+            model = EGAIModelServing(
+                openai_api_key="EMPTY",
+                openai_api_base="{}".format(ENDPOINT_URL),
+                model_name=LLM_MODEL,
+                top_p=0.99,
+                temperature=0.01,
+                streaming=True,
+                callbacks=callbacks,
+                stop=["\n\n"],
+            )
         else:
             seed_value = int(os.getenv("SEED", 42))
-        
-        model = EGAIModelServing(
-            openai_api_key="EMPTY",
-            openai_api_base="{}".format(ENDPOINT_URL),
-            model_name=LLM_MODEL,
-            top_p=0.99,
-            temperature=0.01,
-            streaming=True,
-            callbacks=callbacks,
-            seed=seed_value,
-            max_tokens=max_tokens,
-            stop=["\n\n"]
-        )
+            model = EGAIModelServing(
+                openai_api_key="EMPTY",
+                openai_api_base="{}".format(ENDPOINT_URL),
+                model_name=LLM_MODEL,
+                top_p=0.99,
+                temperature=0.01,
+                streaming=True,
+                callbacks=callbacks,
+                seed=seed_value,
+                max_tokens=max_tokens,
+                stop=["\n\n"],
+            )
 
         re_ranker = CustomReranker(reranking_endpoint=RERANKER_ENDPOINT)
         re_ranker_lambda = RunnableLambda(re_ranker.rerank)
