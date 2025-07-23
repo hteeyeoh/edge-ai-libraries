@@ -24,7 +24,8 @@ services:
       - chatqna-core-ui
 
   chatqna-core:
-    image: ${REGISTRY:-}chatqna:${BACKEND_TAG:-latest}
+    #image: ${REGISTRY:-}chatqna:${BACKEND_TAG:-latest}
+    image: chatqna:ollama
     profiles:
       - DEFAULT
     container_name: chatqna-core
@@ -39,10 +40,12 @@ services:
       EMBEDDING_MODEL_ID: ${EMBEDDING_MODEL_ID}
       RERANKER_MODEL_ID: ${RERANKER_MODEL_ID}
       LLM_MODEL_ID: ${LLM_MODEL_ID}
+      LLM_BACKEND: ${LLM_BACKEND}
     ports:
       - "8888:8888"
     volumes:
       - "${MODEL_CACHE_PATH}:/tmp/model_cache"
+      - "${OLLAMA_CACHE_PATH}:/home/appuser/.ollama/models"
     group_add:
       - ${USER_GROUP_ID-1000}
 
@@ -79,7 +82,7 @@ services:
       - "${MODEL_CACHE_PATH}:/tmp/model_cache"
 
   chatqna-core-ui:
-    image: ${REGISTRY:-}chatqna-ui:${UI_TAG:-latest}
+    image: chatqna-ui:ollama
     container_name: chatqna-core-ui
     build:
       context: ../ui/
