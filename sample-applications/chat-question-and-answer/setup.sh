@@ -39,7 +39,7 @@ export MINIO_ROOT_USER=${MINIO_USER:-dummy_user}
 export MINIO_ROOT_PASSWORD=${MINIO_PASSWD:-dummy_321}
 
 # Setup no_proxy
-export no_proxy=${no_proxy},${OTLP_ENDPOINT},minio-server,data-store,vllm-service,text-generation,tei-embedding-service,ovms-service,reranker,openvino-embedding
+export no_proxy=${no_proxy},minio-server,data-store,vllm-service,text-generation,tei-embedding-service,ovms-service,reranker,openvino-embedding
 
 # ReRanker Config
 export RERANKER_ENDPOINT=http://reranker/rerank

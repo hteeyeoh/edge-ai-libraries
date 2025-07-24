@@ -43,10 +43,10 @@ Returns:
           content: 
             application/json: 
               schema: 
-  /chat/completions: 
+  /chat: 
     post: 
       summary: "Query Chain"
-      description: "Handles POST requests to the /chat/completions endpoint.
+      description: "Handles POST requests to the /chat endpoint.
 
 This endpoint receives a question in the form of a JSON payload, validates the input,
 and returns a streaming response with the processed chunks of the question text.

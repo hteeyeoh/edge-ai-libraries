@@ -67,32 +67,29 @@ engine = create_async_engine(PG_CONNECTION_STRING)
 # Init Embeddings via Intel Edge GenerativeAI Suite
 try:
     embedder = EGAIEmbeddings(
-                openai_api_key="EMPTY",
-                openai_api_base="{}".format(EMBEDDING_ENDPOINT_URL),
-                model=MODEL_NAME,
-                request_timeout=30,  # Add timeout
-                max_retries=3,  # Add retries
-            )
-    logging.info(f"Embeddings initialized with endpoint: {EMBEDDING_ENDPOINT_URL}")
+        openai_api_key="EMPTY",
+        openai_api_base="{}".format(EMBEDDING_ENDPOINT_URL),
+        model=MODEL_NAME,
+        request_timeout=30,  # Add timeout
+        max_retries=3,  # Add retries
+    )
+    logging.info(
+        f"Embeddings initialized with endpoint configured in EMBEDDING_ENDPOINT_URL"
+    )
 except Exception as e:
     logging.error(f"Failed to initialize embeddings: {str(e)}")
     raise
 
-try:
-    knowledge_base = EGAIVectorDB(
-        embeddings=embedder,
-        collection_name=COLLECTION_NAME,
-        connection=engine,
-    )
-    retriever = EGAIVectorStoreRetriever(
-        vectorstore=knowledge_base,
-        search_type="mmr",
-        search_kwargs={"k": 1, "fetch_k": FETCH_K},
-    )
-except Exception as e:
-    logging.error(f"Failed to initialize vector database or retriever: {str(e)}")
-    raise
-
+knowledge_base = EGAIVectorDB(
+    embeddings=embedder,
+    collection_name=COLLECTION_NAME,
+    connection=engine,
+)
+retriever = EGAIVectorStoreRetriever(
+    vectorstore=knowledge_base,
+    search_type="mmr",
+    search_kwargs={"k": 1, "fetch_k": FETCH_K},
+)
 
 
 # Define our prompt
@@ -134,57 +131,48 @@ RERANKER_ENDPOINT = os.getenv("RERANKER_ENDPOINT", "http://localhost:9090/rerank
 callbacks = [streaming_stdout.StreamingStdOutCallbackHandler()]
 
 async def process_chunks(question_text, max_tokens):
-    try:
-        # Validate input
-        if not question_text or not question_text.strip():
-            raise ValueError("Question text cannot be empty")
-            
-        if LLM_BACKEND in ["vllm", "unknown"]:
-            seed_value = None
-            model = EGAIModelServing(
-                openai_api_key="EMPTY",
-                openai_api_base="{}".format(ENDPOINT_URL),
-                model_name=LLM_MODEL,
-                top_p=0.99,
-                temperature=0.01,
-                streaming=True,
-                callbacks=callbacks,
-                stop=["\n\n"],
-            )
-        else:
-            seed_value = int(os.getenv("SEED", 42))
-            model = EGAIModelServing(
-                openai_api_key="EMPTY",
-                openai_api_base="{}".format(ENDPOINT_URL),
-                model_name=LLM_MODEL,
-                top_p=0.99,
-                temperature=0.01,
-                streaming=True,
-                callbacks=callbacks,
-                seed=seed_value,
-                max_tokens=max_tokens,
-                stop=["\n\n"],
-            )
+    if not question_text or not question_text.strip():
+        raise ValueError("Question text cannot be empty")
 
-        re_ranker = CustomReranker(reranking_endpoint=RERANKER_ENDPOINT)
-        re_ranker_lambda = RunnableLambda(re_ranker.rerank)
-
-        # RAG Chain
-        chain = (
-            RunnableParallel({"context": retriever, "question": RunnablePassthrough()})
-            | re_ranker_lambda
-            | prompt
-            | model
-            | StrOutputParser()
+    if LLM_BACKEND in ["vllm", "unknown"]:
+        seed_value = None
+        model = EGAIModelServing(
+            openai_api_key="EMPTY",
+            openai_api_base="{}".format(ENDPOINT_URL),
+            model_name=LLM_MODEL,
+            top_p=0.99,
+            temperature=0.01,
+            streaming=True,
+            callbacks=callbacks,
+            stop=["\n\n"],
         )
-        
-        # Run the chain with the question text
-        async for log in chain.astream(question_text):
-            yield f"data: {log}\n\n"
-            
-    except ValueError as ve:
-        logging.error(f"Validation error in process_chunks: {str(ve)}")
-        yield f"data: Error: {str(ve)}\n\n"
-    except Exception as e:
-        logging.error(f"Error in process_chunks: {str(e)}", exc_info=True)
-        yield f"data: I apologize, but I encountered an error while processing your request. Please try again.\n\n"
+    else:
+        seed_value = int(os.getenv("SEED", 42))
+        model = EGAIModelServing(
+            openai_api_key="EMPTY",
+            openai_api_base="{}".format(ENDPOINT_URL),
+            model_name=LLM_MODEL,
+            top_p=0.99,
+            temperature=0.01,
+            streaming=True,
+            callbacks=callbacks,
+            seed=seed_value,
+            max_tokens=max_tokens,
+            stop=["\n\n"],
+        )
+
+    re_ranker = CustomReranker(reranking_endpoint=RERANKER_ENDPOINT)
+    re_ranker_lambda = RunnableLambda(re_ranker.rerank)
+
+    # RAG Chain
+    chain = (
+        RunnableParallel({"context": retriever, "question": RunnablePassthrough()})
+        | re_ranker_lambda
+        | prompt
+        | model
+        | StrOutputParser()
+    )
+
+    # Run the chain with the question text
+    async for log in chain.astream(question_text):
+        yield f"data: {log}\n\n"

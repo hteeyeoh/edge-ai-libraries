@@ -97,10 +97,10 @@ async def get_llm_model():
         raise HTTPException(status_code=503, detail="LLM_MODEL is not set")
     return {"status": "success", "llm_model": llm_model}
 
-@app.post("/chat/completions", response_class=StreamingResponse)
+@app.post("/chat", response_class=StreamingResponse)
 async def query_chain(payload: QuestionRequest):
     """
-    Handles POST requests to the /chat/completions endpoint.
+    Handles POST requests to the /chat endpoint.
 
     This endpoint receives a question in the form of a JSON payload, validates the input,
     and returns a streaming response with the processed chunks of the question text.
