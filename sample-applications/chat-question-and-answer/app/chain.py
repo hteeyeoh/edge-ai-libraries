@@ -32,13 +32,15 @@ logging.basicConfig(level=logging.INFO)
 otlp_endpoint = os.environ.get("OTLP_ENDPOINT", False)
 
 # Initialize OpenTelemetry
-if not isinstance(trace.get_tracer_provider(), TracerProvider):    
+if not isinstance(trace.get_tracer_provider(), TracerProvider):
     tracer_provider = TracerProvider()
     trace.set_tracer_provider(tracer_provider)
 
     # Set up OTLP exporter and span processor
     if not otlp_endpoint:
-        logging.warning("No OTLP endpoint provided - Telemetry data will not be collected.")
+        logging.warning(
+            "No OTLP endpoint provided - Telemetry data will not be collected."
+        )
     else:
         otlp_exporter = OTLPSpanExporter()
         span_processor = BatchSpanProcessor(otlp_exporter)
@@ -50,11 +52,13 @@ if not isinstance(trace.get_tracer_provider(), TracerProvider):
             environment=os.environ.get("OTEL_SERVICE_ENV", "chatqna"),
         )
 
-        logging.info(f"Tracing enabled: OpenTelemetry configured using OTLP endpoint at {otlp_endpoint}")
+        logging.info(
+            f"Tracing enabled: OpenTelemetry configured using OTLP endpoint at {otlp_endpoint}"
+        )
 
 PG_CONNECTION_STRING = os.getenv("PG_CONNECTION_STRING")
-MODEL_NAME = os.getenv("EMBEDDING_MODEL","BAAI/bge-small-en-v1.5")
-EMBEDDING_ENDPOINT_URL = os.getenv("EMBEDDING_ENDPOINT_URL","http://localhost:6006")
+MODEL_NAME = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
+EMBEDDING_ENDPOINT_URL = os.getenv("EMBEDDING_ENDPOINT_URL", "http://localhost:6006")
 COLLECTION_NAME = os.getenv("INDEX_NAME")
 FETCH_K = os.getenv("FETCH_K")
 
@@ -88,6 +92,7 @@ try:
 except Exception as e:
     logging.error(f"Failed to initialize vector database or retriever: {str(e)}")
     raise
+
 
 # Define our prompt
 template = """
