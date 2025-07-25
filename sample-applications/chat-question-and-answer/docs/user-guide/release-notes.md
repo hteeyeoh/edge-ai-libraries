@@ -8,7 +8,7 @@
 - Image Optimization for ChatQnA Backend and Document Ingestion Microservices. Reducing image sizes, which will lead to faster processing times and reduced bandwidth usage.
 - Update to Run ChatQnA-UI and Nginx Container with Non-Root Access Privileges.
 - Security Vulnerabilities Fix for Dependency Packages.
-- Max Token Parameter Added to /stream_log API.
+- Max Token Parameter Added to /chat API.
 - EMF deployment is supported.
 - Bug fixes.
 

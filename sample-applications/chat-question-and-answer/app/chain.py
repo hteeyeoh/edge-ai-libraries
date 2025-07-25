@@ -23,7 +23,6 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 import openlit
-from transformers import AutoTokenizer
 
 set_verbose(True)
 
@@ -66,13 +65,20 @@ FETCH_K = os.getenv("FETCH_K")
 engine = create_async_engine(PG_CONNECTION_STRING)
 
 # Init Embeddings via Intel Edge GenerativeAI Suite
-embedder = EGAIEmbeddings(
-    openai_api_key="EMPTY",
-    openai_api_base="{}".format(EMBEDDING_ENDPOINT_URL),
-    model=MODEL_NAME,
-    tiktoken_enabled=False,
-)
-
+try:
+    embedder = EGAIEmbeddings(
+        openai_api_key="EMPTY",
+        openai_api_base="{}".format(EMBEDDING_ENDPOINT_URL),
+        model=MODEL_NAME,
+        request_timeout=30,  # Add timeout
+        max_retries=3,  # Add retries
+    )
+    logging.info(
+        f"Embeddings initialized with endpoint configured in EMBEDDING_ENDPOINT_URL"
+    )
+except Exception as e:
+    logging.error(f"Failed to initialize embeddings: {str(e)}")
+    raise
 
 knowledge_base = EGAIVectorDB(
     embeddings=embedder,
@@ -84,6 +90,7 @@ retriever = EGAIVectorStoreRetriever(
     search_type="mmr",
     search_kwargs={"k": 1, "fetch_k": FETCH_K},
 )
+
 
 # Define our prompt
 template = """
@@ -122,10 +129,11 @@ logging.info(f"Using LLM inference backend: {LLM_BACKEND}")
 LLM_MODEL = os.getenv("LLM_MODEL", "Intel/neural-chat-7b-v3-3")
 RERANKER_ENDPOINT = os.getenv("RERANKER_ENDPOINT", "http://localhost:9090/rerank")
 callbacks = [streaming_stdout.StreamingStdOutCallbackHandler()]
-tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL)
-
 
 async def process_chunks(question_text, max_tokens):
+    if not question_text or not question_text.strip():
+        raise ValueError("Question text cannot be empty")
+
     if LLM_BACKEND in ["vllm", "unknown"]:
         seed_value = None
         model = EGAIModelServing(
@@ -152,11 +160,6 @@ async def process_chunks(question_text, max_tokens):
             max_tokens=max_tokens,
             stop=["\n\n"],
         )
-    tokens = tokenizer.tokenize(str(prompt))
-    num_tokens = len(tokens)
-    logging.info(f"Prompt tokens for model {LLM_MODEL}: {num_tokens}")
-    output_tokens = max_tokens - num_tokens
-    logging.info(f"Output tokens for model {LLM_MODEL}: {output_tokens}")
 
     re_ranker = CustomReranker(reranking_endpoint=RERANKER_ENDPOINT)
     re_ranker_lambda = RunnableLambda(re_ranker.rerank)
@@ -169,6 +172,7 @@ async def process_chunks(question_text, max_tokens):
         | model
         | StrOutputParser()
     )
+
     # Run the chain with the question text
     async for log in chain.astream(question_text):
         yield f"data: {log}\n\n"
