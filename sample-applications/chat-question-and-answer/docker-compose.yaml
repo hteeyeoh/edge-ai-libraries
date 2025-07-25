@@ -225,6 +225,10 @@ services:
       - no_proxy=${no_proxy}
       - http_proxy=${http_proxy}
       - https_proxy=${https_proxy}
+    ulimits:
+      nofile:
+        soft: 16384
+        hard: 65536
     ports:
       - "9300:9300"
       - "8300:80"
@@ -267,6 +271,10 @@ services:
       - no_proxy=${no_proxy}
       - http_proxy=${http_proxy}
       - https_proxy=${https_proxy}
+    ulimits:
+      nofile:
+        soft: 16384
+        hard: 65536
     ports:
       - "9000:9000"
       - "8300:80"
