@@ -120,7 +120,7 @@ async def query_chain(payload: QuestionRequest):
         question_text = payload.input
         max_tokens = payload.max_tokens if payload.max_tokens else 512
         if max_tokens > 1024:
-            raise HTTPException(status_code=422, detail="MAX_TOKENS cannot be greater than 1024")
+            raise HTTPException(status_code=422, detail="max tokens cannot be greater than 1024")
         if not question_text or question_text == "":
             raise HTTPException(status_code=422, detail="Question is required")
         
