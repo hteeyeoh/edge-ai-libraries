@@ -3,7 +3,7 @@
 #Volume mount paths
 export model_cache_path=~/.cache/huggingface
 export SSL_CERTIFICATES_PATH=/etc/ssl/certs
-export CA_CERTIFICATES_PATH=/opt/local/share/ca-certificates
+export CA_CERTIFICATES_PATH=/opt/share/ca-certificates
 export VOLUME_OVMS=${PWD}/ovms_config
 
 # Setup the PG Vector DB Connection configuration
