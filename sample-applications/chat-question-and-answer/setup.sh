@@ -1,5 +1,11 @@
 #!/bin/bash
 
+#Volume mount paths
+export model_cache_path=~/.cache/huggingface
+export SSL_CERTIFICATES_PATH=/etc/ssl/certs
+export CA_CERTIFICATES_PATH=/opt/local/share/ca-certificates
+export VOLUME_OVMS=${PWD}/ovms_config
+
 # Setup the PG Vector DB Connection configuration
 export PGVECTOR_HOST=pgvector_db
 export PGVECTOR_PORT=5432
@@ -61,7 +67,6 @@ export KVCACHE_SPACE=50
 # OVMS
 export MODEL_DIRECTORY_NAME=$(basename $LLM_MODEL)
 export WEIGHT_FORMAT=int8
-export VOLUME_OVMS=${PWD}/ovms_config
 
 #TGI
 #export VOLUME=$PWD/data
