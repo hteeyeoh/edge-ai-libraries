@@ -1,16 +1,23 @@
 from .config import config
-from .utils import login_to_huggingface, download_huggingface_model, convert_model
+from .utils import (
+    login_to_huggingface,
+    download_huggingface_model,
+    convert_model,
+    download_ollama_model,
+    start_ollama_server)
 from .document import load_file_document
 from .logger import logger
+from langchain.retrievers import ContextualCompressionRetriever
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import OpenVINOBgeEmbeddings
 from langchain_community.document_compressors.openvino_rerank import OpenVINOReranker
-from langchain.retrievers import ContextualCompressionRetriever
-from langchain_huggingface import HuggingFacePipeline
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_huggingface import HuggingFacePipeline
+from langchain_ollama import OllamaEmbeddings
+from langchain_ollama.llms import OllamaLLM
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 import os
 import pandas as pd
 
@@ -20,56 +27,71 @@ vectorstore = None
 # If RUN_TEST is set to "True", the model download and conversion steps are skipped.
 # This flag is set in the conftest.py file before running the tests.
 if os.getenv("RUN_TEST", "").lower() != "true":
-    # login huggingface
-    login_to_huggingface(config.HF_ACCESS_TOKEN)
+    if config.MODEL_BACKEND == "openvino":
+        # login huggingface
+        login_to_huggingface(config.HF_ACCESS_TOKEN)
 
-    # Download convert the model to openvino optimized
-    download_huggingface_model(config.EMBEDDING_MODEL_ID, config._CACHE_DIR)
-    download_huggingface_model(config.RERANKER_MODEL_ID, config._CACHE_DIR)
-    download_huggingface_model(config.LLM_MODEL_ID, config._CACHE_DIR)
+        # Download convert the model to openvino optimized
+        download_huggingface_model(config.EMBEDDING_MODEL_ID, config._CACHE_DIR)
+        download_huggingface_model(config.RERANKER_MODEL_ID, config._CACHE_DIR)
+        download_huggingface_model(config.LLM_MODEL_ID, config._CACHE_DIR)
 
-    # Convert to openvino IR
-    convert_model(config.EMBEDDING_MODEL_ID, config._CACHE_DIR, "embedding")
-    convert_model(config.RERANKER_MODEL_ID, config._CACHE_DIR, "reranker")
-    convert_model(config.LLM_MODEL_ID, config._CACHE_DIR, "llm")
+        # Convert to openvino IR
+        convert_model(config.EMBEDDING_MODEL_ID, config._CACHE_DIR, "embedding")
+        convert_model(config.RERANKER_MODEL_ID, config._CACHE_DIR, "reranker")
+        convert_model(config.LLM_MODEL_ID, config._CACHE_DIR, "llm")
 
+        # Initialize Embedding Model
+        embedding = OpenVINOBgeEmbeddings(
+            model_name_or_path=f"{config._CACHE_DIR}/{config.EMBEDDING_MODEL_ID}",
+            model_kwargs={"device": config.EMBEDDING_DEVICE, "compile": False},
+        )
+        embedding.ov_model.compile()
+
+        # Initialize Reranker Model
+        reranker = OpenVINOReranker(
+            model_name_or_path=f"{config._CACHE_DIR}/{config.RERANKER_MODEL_ID}",
+            model_kwargs={"device": config.RERANKER_DEVICE},
+            top_n=2,
+        )
+
+        # Initialize LLM
+        llm = HuggingFacePipeline.from_model_id(
+            model_id=f"{config._CACHE_DIR}/{config.LLM_MODEL_ID}",
+            task="text-generation",
+            backend="openvino",
+            model_kwargs={
+                "device": config.LLM_DEVICE,
+                "ov_config": {
+                    "PERFORMANCE_HINT": "LATENCY",
+                    "NUM_STREAMS": "1",
+                    "CACHE_DIR": f"{config._CACHE_DIR}/{config.LLM_MODEL_ID}/model_cache",
+                },
+                "trust_remote_code": True,
+            },
+            pipeline_kwargs={"max_new_tokens": config.MAX_TOKENS},
+        )
+        if llm.pipeline.tokenizer.eos_token_id:
+            llm.pipeline.tokenizer.pad_token_id = llm.pipeline.tokenizer.eos_token_id
+
+    elif config.MODEL_BACKEND == "ollama":
+        # Start Ollama server
+        start_ollama_server()
+
+        # Download Ollama models
+        download_ollama_model(config.EMBEDDING_MODEL_ID, "embedding")
+        download_ollama_model(config.LLM_MODEL_ID, "llm")
+
+        # Initialize Embedding with Ollama
+        embedding = OllamaEmbeddings(model=config.EMBEDDING_MODEL_ID)
+
+        # Initialize LLM with Ollama
+        llm = OllamaLLM(model=config.LLM_MODEL_ID)
 
     template = config.PROMPT_TEMPLATE
 
     prompt = ChatPromptTemplate.from_template(template)
 
-    # Initialize Embedding Model
-    embedding = OpenVINOBgeEmbeddings(
-        model_name_or_path=f"{config._CACHE_DIR}/{config.EMBEDDING_MODEL_ID}",
-        model_kwargs={"device": config.EMBEDDING_DEVICE, "compile": False},
-    )
-    embedding.ov_model.compile()
-
-    # Initialize Reranker Model
-    reranker = OpenVINOReranker(
-        model_name_or_path=f"{config._CACHE_DIR}/{config.RERANKER_MODEL_ID}",
-        model_kwargs={"device": config.RERANKER_DEVICE},
-        top_n=2,
-    )
-
-    # Initialize LLM
-    llm = HuggingFacePipeline.from_model_id(
-        model_id=f"{config._CACHE_DIR}/{config.LLM_MODEL_ID}",
-        task="text-generation",
-        backend="openvino",
-        model_kwargs={
-            "device": config.LLM_DEVICE,
-            "ov_config": {
-                "PERFORMANCE_HINT": "LATENCY",
-                "NUM_STREAMS": "1",
-                "CACHE_DIR": f"{config._CACHE_DIR}/{config.LLM_MODEL_ID}/model_cache",
-            },
-            "trust_remote_code": True,
-        },
-        pipeline_kwargs={"max_new_tokens": config.MAX_TOKENS},
-    )
-    if llm.pipeline.tokenizer.eos_token_id:
-        llm.pipeline.tokenizer.pad_token_id = llm.pipeline.tokenizer.eos_token_id
 else:
     logger.info("Bypassing to mock these functions because RUN_TEST is set to 'True' to run pytest unit test.")
 
@@ -88,35 +110,35 @@ def default_context(docs):
     return ""
 
 
-def get_retriever(enable_rerank=True, search_method="similarity_score_threshold"):
+def get_retriever():
     """
     Creates and returns a retriever object with optional reranking capability.
-
-    Args:
-        enable_rerank (bool): If True, enables the reranker to improve retrieval results. Defaults to True.
-        search_method (str): The method used for searching within the vector store. Defaults to "similarity_score_threshold".
 
     Returns:
         retriever: A retriever object, optionally wrapped with a contextual compression reranker.
 
     """
 
+    enable_rerank = config._ENABLE_RERANK
+    search_method = config._SEARCH_METHOD
+    fetch_k = config._FETCH_K
+
     if vectorstore == None:
         return None
 
     else:
         retriever = vectorstore.as_retriever(
-            search_kwargs={"k": 3, "score_threshold": 0.5}, search_type=search_method
+            search_kwargs={
+                "k": 3,
+                "fetch_k": fetch_k,
+            },
+            search_type=search_method
         )
         if enable_rerank:
-            logger.info("Enable reranker")
-
             return ContextualCompressionRetriever(
                 base_compressor=reranker, base_retriever=retriever
             )
         else:
-            logger.info("Disable reranker")
-
             return retriever
 
 
@@ -270,3 +292,29 @@ def delete_embedding_from_vectordb(document: str = "", delete_all: bool = False)
     vectorstore.delete(chunk_list)
 
     return True
+
+
+def get_all_documents_from_vectordb():
+    global vectorstore
+
+    if vectorstore is None:
+        return []
+
+    # Assuming `vectorstore` is your FAISS object
+    logger.info("Retrieving all documents from the vector store...")
+    stored_docs = vectorstore.docstore._dict
+
+    # To list all documents
+    logger.info(f"Total documents in vector store: {len(stored_docs)}")
+
+    # Convert to a list of dictionaries
+    documents_list = [
+        {
+            "id": doc_id,
+            "content": doc.page_content,
+            "metadata": doc.metadata
+        }
+        for doc_id, doc in stored_docs.items()
+    ]
+
+    return documents_list

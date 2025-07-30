@@ -74,6 +74,9 @@ RUN apt-get update && apt-get install --no-install-recommends -y curl build-esse
 # Install poetry. Installs in $POETRY_HOME with version $POETRY_VERSION
 RUN curl -sSL https://install.python-poetry.org | python -
 
+# Install ollama
+RUN curl -fsSL https://ollama.com/install.sh | sh -
+
 WORKDIR $SETUP_PATH
 COPY poetry.lock pyproject.toml ./
 # Install runtime (prod) deps. Uses $POETRY_VIRTUALENVS_IN_PROJECT to create venv.
@@ -126,18 +129,22 @@ RUN apt-get update && apt-get install --no-install-recommends --fix-missing -y \
 # Copy the poetry installation and the virtual env
 COPY --from=builder-base $SETUP_PATH $SETUP_PATH
 
+# Copy ollama lib and binary from builder-base
+COPY --from=builder-base /usr/local/bin/ollama /usr/local/bin/ollama
+COPY --from=builder-base /usr/local/lib/ollama /usr/local/lib/ollama
+
 RUN sed -i 's/tokenizer.pad_token_id = model.config.eos_token_id/tokenizer.pad_token_id = tokenizer.eos_token_id/' \
     /opt/projsetup/.venv/lib/python3.11/site-packages/langchain_huggingface/llms/huggingface_pipeline.py
 
-# Prepare directories for model cache and config
-RUN mkdir -p /tmp/model_cache /tmp/model_config
+# Prepare directories for huggingface and ollama model cache and config
+RUN mkdir -p /tmp/model_cache /tmp/model_config /home/appuser/.ollama
 
 # Copy application code and model config
 COPY app ./app
 COPY model_config/sample/template.yaml /tmp/model_config/default_model.yaml
 
 # Set ownership to appuser
-RUN chown -R appuser:appuser /my-app /tmp/model_cache /tmp/model_config/
+RUN chown -R appuser:appuser /my-app /tmp/model_cache /tmp/model_config/ /home/appuser/.ollama
 
 USER appuser
 

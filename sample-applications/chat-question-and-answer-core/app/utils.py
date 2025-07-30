@@ -1,4 +1,7 @@
 import os
+import re
+import subprocess
+import time
 import openvino as ov
 import openvino.properties as props
 from .logger import logger
@@ -10,6 +13,52 @@ from optimum.intel import (
 )
 from transformers import AutoTokenizer
 from openvino_tokenizers import convert_tokenizer
+
+
+def get_available_devices():
+    """
+    Retrieves a list of available devices from the OpenVINO core.
+    Returns:
+        list: A list of available device names.
+    """
+
+    core = ov.Core()
+    device_list = core.available_devices
+
+    return device_list
+
+
+def get_device_property(device: str = ""):
+    """
+    Retrieves the properties of a specified device.
+    Args:
+        device (str): The name of the device to query. Defaults to an empty string.
+    Returns:
+        dict: A dictionary containing the properties of the device. The keys are property names,
+            and the values are the corresponding property values. Non-serializable types are
+            converted to strings. If a property value cannot be retrieved due to a TypeError,
+            it is set to "UNSUPPORTED TYPE".
+    """
+
+    properties_dict = {}
+    core = ov.Core()
+    supported_properties = core.get_property(device, "SUPPORTED_PROPERTIES")
+
+    for property_key in supported_properties:
+        if property_key not in ('SUPPORTED_METRICS', 'SUPPORTED_CONFIG_KEYS', 'SUPPORTED_PROPERTIES'):
+            try:
+                property_val = core.get_property(device, property_key)
+
+                # Convert non-serializable types to strings
+                if not isinstance(property_val, (str, int, float, bool, type(None))):
+                    property_val = str(property_val)
+
+            except TypeError:
+                property_val = "UNSUPPORTED TYPE"
+
+            properties_dict[property_key] = property_val
+
+    return properties_dict
 
 
 def login_to_huggingface(token: str):
@@ -107,47 +156,63 @@ def convert_model(model_id: str, cache_dir: str, model_type: str):
             llm_model.save_pretrained(f"{cache_dir}/{model_id}")
 
 
-def get_available_devices():
-    """
-    Retrieves a list of available devices from the OpenVINO core.
-    Returns:
-        list: A list of available device names.
-    """
+def start_ollama_server():
+    # Known limitation: Unset proxy environment variables to avoid issues with Ollama
+    os.environ.pop("HTTP_PROXY", None)
+    os.environ.pop("http_proxy", None)
+    os.environ.pop("https_proxy", None)
 
-    core = ov.Core()
-    device_list = core.available_devices
+    try:
+        serve_process = subprocess.Popen(["ollama", "serve"])
 
-    return device_list
+        # Optional: wait a few seconds to ensure the server starts
+        time.sleep(5)
+
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        raise e
 
 
-def get_device_property(device: str = ""):
-    """
-    Retrieves the properties of a specified device.
-    Args:
-        device (str): The name of the device to query. Defaults to an empty string.
-    Returns:
-        dict: A dictionary containing the properties of the device. The keys are property names,
-            and the values are the corresponding property values. Non-serializable types are
-            converted to strings. If a property value cannot be retrieved due to a TypeError,
-            it is set to "UNSUPPORTED TYPE".
-    """
+def download_ollama_model(model_id: str, model_type: str):
+    # Set the `OLLAMA_MODELS` to store the Ollama models
+    # os.environ['OLLAMA_MODELS'] = f'/home/appuser/.ollama/models/{model_id}'
 
-    properties_dict = {}
-    core = ov.Core()
-    supported_properties = core.get_property(device, "SUPPORTED_PROPERTIES")
+    try:
+        logger.info(f"Starting {model_id} model download...")
 
-    for property_key in supported_properties:
-        if property_key not in ('SUPPORTED_METRICS', 'SUPPORTED_CONFIG_KEYS', 'SUPPORTED_PROPERTIES'):
-            try:
-                property_val = core.get_property(device, property_key)
+        # Download the model using Ollama CLI
+        pull_process = subprocess.run(
+            ["ollama", "pull", model_id],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
 
-                # Convert non-serializable types to strings
-                if not isinstance(property_val, (str, int, float, bool, type(None))):
-                    property_val = str(property_val)
+        logger.info(f"Ollama model {model_id} downloaded successfully.")
 
-            except TypeError:
-                property_val = "UNSUPPORTED TYPE"
+        # Run and load the model
+        # Only aplicable for LLM models
+        if model_type == "llm":
+            run_process = subprocess.run(
+                ["ollama", "run", model_id],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
 
-            properties_dict[property_key] = property_val
+            logger.info(f"Ollama model {model_id} is running successfully.")
 
-    return properties_dict
+    except subprocess.CalledProcessError as e:
+        # Clean ANSI escape sequences and extract the last meaningful error line
+        raw_error = e.stderr or str(e)
+        clean_error = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', raw_error) # Remove ANSI codes
+        lines = clean_error.strip().splitlines()
+        err_message = next((line for line in reversed(lines) if "Error:" in line), lines[-1] if lines else "Unknown error")
+        logger.error(f"Error downloading Ollama model {model_id}: {err_message}")
+        raise RuntimeError(f"Ollama failed: {err_message}") from e
+
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        raise e
