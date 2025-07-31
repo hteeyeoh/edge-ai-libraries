@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     _SEARCH_METHOD: str = PrivateAttr("mmr")
     _FETCH_K: int = PrivateAttr(10)
     _CACHE_DIR: str = PrivateAttr("/tmp/model_cache")
+    _OLLAMA_CACHE_DIR: str = PrivateAttr("/tmp/ollama_model_cache")
     _HF_DATASETS_CACHE: str = PrivateAttr("/tmp/model_cache")
     _TMP_FILE_PATH: str = PrivateAttr("/tmp/chatqna/documents")
     _DEFAULT_MODEL_CONFIG: str = PrivateAttr("/tmp/model_config/default_model.yaml")

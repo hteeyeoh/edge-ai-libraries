@@ -16,8 +16,7 @@ from .chain import (
     delete_embedding_from_vectordb,
     get_retriever,
     build_chain,
-    process_query,
-    get_all_documents_from_vectordb
+    process_query
 )
 from .document import validate_document, save_document
 from .utils import get_available_devices, get_device_property
@@ -140,32 +139,6 @@ async def get_documents():
         documents = get_document_from_vectordb()
 
         return {"status": "Success", "metadata": {"documents": documents}}
-
-    except Exception as e:
-        logger.exception("Error getting documents.", error=e)
-        raise HTTPException(
-            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail="Error getting documents.",
-        )
-
-
-@app.get(
-    "/all-documents",
-    tags=["Document Ingestion API"],
-    summary="Get list of documents ingested.",
-)
-async def get_documents():
-    """
-    Get the list of documents ingested in the system.
-
-    Returns:
-        dict: A dictionary containing the list of documents ingested.
-    """
-
-    try:
-        all_document= get_all_documents_from_vectordb()
-
-        return {"status": "Success", "data": all_document}
 
     except Exception as e:
         logger.exception("Error getting documents.", error=e)

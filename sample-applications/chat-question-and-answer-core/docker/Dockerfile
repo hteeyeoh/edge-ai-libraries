@@ -131,20 +131,20 @@ COPY --from=builder-base $SETUP_PATH $SETUP_PATH
 
 # Copy ollama lib and binary from builder-base
 COPY --from=builder-base /usr/local/bin/ollama /usr/local/bin/ollama
-COPY --from=builder-base /usr/local/lib/ollama /usr/local/lib/ollama
+# COPY --from=builder-base /usr/local/lib/ollama /usr/local/lib/ollama
 
 RUN sed -i 's/tokenizer.pad_token_id = model.config.eos_token_id/tokenizer.pad_token_id = tokenizer.eos_token_id/' \
     /opt/projsetup/.venv/lib/python3.11/site-packages/langchain_huggingface/llms/huggingface_pipeline.py
 
 # Prepare directories for huggingface and ollama model cache and config
-RUN mkdir -p /tmp/model_cache /tmp/model_config /home/appuser/.ollama
+RUN mkdir -p /tmp/model_cache /tmp/model_config /tmp/ollama_model_cache
 
 # Copy application code and model config
 COPY app ./app
 COPY model_config/sample/template.yaml /tmp/model_config/default_model.yaml
 
 # Set ownership to appuser
-RUN chown -R appuser:appuser /my-app /tmp/model_cache /tmp/model_config/ /home/appuser/.ollama
+RUN chown -R appuser:appuser /my-app /tmp/model_cache /tmp/model_config/ /tmp/ollama_model_cache
 
 USER appuser
 

@@ -76,7 +76,7 @@ if os.getenv("RUN_TEST", "").lower() != "true":
 
     elif config.MODEL_BACKEND == "ollama":
         # Start Ollama server
-        start_ollama_server()
+        start_ollama_server(config._OLLAMA_CACHE_DIR)
 
         # Download Ollama models
         download_ollama_model(config.EMBEDDING_MODEL_ID, "embedding")
@@ -292,29 +292,3 @@ def delete_embedding_from_vectordb(document: str = "", delete_all: bool = False)
     vectorstore.delete(chunk_list)
 
     return True
-
-
-def get_all_documents_from_vectordb():
-    global vectorstore
-
-    if vectorstore is None:
-        return []
-
-    # Assuming `vectorstore` is your FAISS object
-    logger.info("Retrieving all documents from the vector store...")
-    stored_docs = vectorstore.docstore._dict
-
-    # To list all documents
-    logger.info(f"Total documents in vector store: {len(stored_docs)}")
-
-    # Convert to a list of dictionaries
-    documents_list = [
-        {
-            "id": doc_id,
-            "content": doc.page_content,
-            "metadata": doc.metadata
-        }
-        for doc_id, doc in stored_docs.items()
-    ]
-
-    return documents_list

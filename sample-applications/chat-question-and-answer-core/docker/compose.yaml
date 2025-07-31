@@ -40,7 +40,7 @@ services:
       - "8888:8888"
     volumes:
       - "${MODEL_CACHE_PATH}:/tmp/model_cache"
-      - "${OLLAMA_CACHE_PATH}:/home/appuser/.ollama/models"
+      - "${MODEL_CACHE_PATH}/ollama_models:/tmp/ollama_model_cache"
       - "${MODEL_CONFIG_PATH:-/dev/null}:/tmp/model_config/config.yaml"
     group_add:
       - ${USER_GROUP_ID-1000}
