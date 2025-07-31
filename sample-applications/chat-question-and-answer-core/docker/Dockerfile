@@ -150,4 +150,4 @@ USER appuser
 
 EXPOSE 8888
 
-CMD uvicorn app.server:app --host 0.0.0.0 --port 8888
+CMD ["uvicorn", "app.server:app", "--host", "0.0.0.0", "--port", "8888"]
