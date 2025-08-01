@@ -20,12 +20,13 @@ Following steps should be followed to deploy ChatQ&A using Helm. You can install
 
 #### Step 1: Pull the Specific Chart
 
-Use the following command to pull the Helm chart from Docker Hub:
+Use the following command to pull the Helm chart from [Docker Hub](https://hub.docker.com/r/intel/chat-question-and-answer):
+
 ```bash
 helm pull oci://registry-1.docker.io/intel/chat-question-and-answer --version <version-no>
 ```
 
-Refer to the release notes for details on the latest version number to use for the sample application.
+🔍 Refer to the [Docker Hub tags page](https://hub.docker.com/r/intel/chat-question-and-answer/tags) for details on the latest version number to use for the sample application.
 
 #### Step 2: Extract the `.tgz` File
 
@@ -34,7 +35,7 @@ After pulling the chart, extract the `.tgz` file:
 tar -xvf chat-question-and-answer-<version-no>.tgz
 ```
 
-This will create a directory named `chat-question-and-answer` containing the chart files. Navigate to the extracted directory. 
+This will create a directory named `chat-question-and-answer` containing the chart files. Navigate to the extracted directory.
 ```bash
 cd chat-question-and-answer
 ```
@@ -139,7 +140,7 @@ kubectl get pods -n <your-namespace>
 kubectl get services -n <your-namespace>
 ```
 
-### Step 7: Access the Application 
+### Step 7: Access the Application
 
 Open the UI in a browser at http://\<node-ip\>:\<ui-node-port\>
 

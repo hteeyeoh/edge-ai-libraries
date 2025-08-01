@@ -20,13 +20,14 @@ You can deploy the ChatQ&A Core application using `Helm` in **two ways**: by pul
 
 #### Step 1: Pull the Helm Chart
 
-Use the following command to pull the desired version of the chart:
+Use the following command to pull the Helm chart from [Docker Hub](https://hub.docker.com/r/intel/chat-question-and-answer-core):
 
 ```bash
 helm pull oci://registry-1.docker.io/intel/chat-question-and-answer-core --version <version-no>
 ```
 
-🔍 Refer to the release notes for the latest version number.
+🔍 Refer to the [Docker Hub tags page](https://hub.docker.com/r/intel/chat-question-and-answer-core/tags) for details on the latest version number to use for the sample application.
+
 
 #### Step 2: Extract the Chart
 
