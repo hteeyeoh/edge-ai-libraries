@@ -39,18 +39,19 @@ Follow the steps in this section to quickly pull the latest pre-built Deep Learn
 
 ### Pull the image and start container
 
-- Pull the image with the latest tag from registry
-
-   ```sh
-     docker pull intel/dlstreamer-pipeline-server:3.1.0
-   ```
-
 - Clone the repository and change to the docker directory inside DL Streamer Pipeline Server project.
 
   ```sh
     git clone <link-to-repository>
     cd <path/to/dlstreamer-pipeline-server/docker>
   ```
+
+- Pull the image with the latest tag from registry
+
+   ```sh
+     # Update DLSTREAMER_PIPELINE_SERVER_IMAGE in <path/to/dlstreamer-pipeline-server/docker/.env> if necessary
+     docker pull "$(grep ^DLSTREAMER_PIPELINE_SERVER_IMAGE= .env | cut -d= -f2-)"
+   ```
 
 - Run the image with the [compose file](./docker/docker-compose.yml) provided in this repo.
 
@@ -134,18 +135,13 @@ Add the following lines in [.env file](./docker/.env) if you are behind a proxy.
 Update the following lines in [.env file](./docker/.env) for choosing the right base image and also for naming the image that gets built.
 
   ``` sh
-  # For Ubuntu 22.04: ghcr.io/open-edge-platform/edge-ai-libraries/deb-final-img-ubuntu22:candidate1407
-  # For Ubuntu 24.04: ghcr.io/open-edge-platform/edge-ai-libraries/deb-final-img-ubuntu24:candidate1407
+  # See .env file for example values
   BASE_IMAGE=
 
-  # For Ubuntu 22.04 and optimized image: intel/dlstreamer-pipeline-server:3.1.0-ubuntu22
-  # For Ubuntu 24.04 and optimized image: intel/dlstreamer-pipeline-server:3.1.0-ubuntu24
-  # For Ubuntu 22.04 and extended image: intel/dlstreamer-pipeline-server:3.1.0-extended-ubuntu22
-  # For Ubuntu 24.04 and extended image: intel/dlstreamer-pipeline-server:3.1.0-extended-ubuntu24
+  # See .env file for example values
   DLSTREAMER_PIPELINE_SERVER_IMAGE=
 
-  # For optimized image: dlstreamer-pipeline-server
-  # For extended image: dlstreamer-pipeline-server-extended
+  # See .env file for example values
   BUILD_TARGET=
   ```
 
@@ -184,6 +180,10 @@ Refer [here](https://docs.openedgeplatform.intel.com/edge-ai-libraries/dlstreame
   ```
 ---
 
+## Troubleshooting
+- [Troubleshooting Guide](docs/user-guide/troubleshooting-guide.md)
+
+---
 ## Learn More
 
 -   Understand the components, services, architecture, and data flow, in the [Overview](https://docs.openedgeplatform.intel.com/edge-ai-libraries/dlstreamer-pipeline-server/main/user-guide/Overview.html)
