@@ -2,21 +2,28 @@
 
 ## Current Release
 
+**Version**: 1.2.2 \
+**Release Date**: WW32 2025
+
+- Enhanced container security by updating UI and NGINX containers to run as non-root users, aligning with industry best practices.
+- Improved EMT-S(Version 3.0) stability and performance through targeted bug fixes and optimizations.
+- Renamed stream_log/ endpoint to chat/, reflecting its current functionality more accurately.
+
+## Previous Release
+
 **Version**: 1.2.1 \
 **Release Date**: WW27 2025
 
 - Image Optimization for ChatQnA Backend and Document Ingestion Microservices. Reducing image sizes, which will lead to faster processing times and reduced bandwidth usage.
 - Update to Run ChatQnA-UI and Nginx Container with Non-Root Access Privileges.
 - Security Vulnerabilities Fix for Dependency Packages.
-- Max Token Parameter Added to /chat API.
+- Max Token Parameter Added to /stream_log API.
 - EMF deployment is supported.
 - Bug fixes.
 
 ### Known Issues/Behavior:
 - UI and NGINX container running as root Privilege in Helm Deployment
 - Application running into Model Type issue on EMT.
-
-## Previous Release
 
 **Version**: 1.2.0 \
 **Release Date**: WW20 2025
