@@ -84,7 +84,6 @@ spec:
         allowPrivilegeEscalation: false
       volumes:
       - configMap:
-          defaultMode: 420
           name: {{ include "nginx.fullname" . }}-config
         name: nginx-config-volume
       {{- with .Values.nodeSelector }}
