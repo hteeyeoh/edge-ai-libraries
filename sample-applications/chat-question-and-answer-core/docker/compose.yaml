@@ -23,6 +23,39 @@ services:
       - chatqna-core-gpu
       - chatqna-core-ui
 
+  nginx-ollama:
+    image: nginxinc/nginx-unprivileged:1.27.4
+    profiles:
+      - OLLAMA
+    ports:
+      - "8102:8102"
+    volumes:
+      - ../nginx_config/nginx-ollama.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - chatqna-core-ollama
+      - chatqna-core-ui
+
+  chatqna-core-ollama:
+    image: ${REGISTRY:-}chatqna:${BACKEND_TAG:-latest}
+    profiles:
+      - OLLAMA
+    container_name: chatqna-core-ollama
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+    environment:
+      http_proxy: ${http_proxy}
+      https_proxy: ${https_proxy}
+      no_proxy: ${no_proxy}
+      HF_ACCESS_TOKEN: ${HF_ACCESS_TOKEN}
+    ports:
+      - "8888:8888"
+    volumes:
+      - "${MODEL_CACHE_PATH}/ollama_models:/tmp/ollama_model_cache"
+      - "${MODEL_CONFIG_PATH:-/dev/null}:/tmp/model_config/config.yaml"
+    group_add:
+      - ${USER_GROUP_ID-1000}
+
   chatqna-core:
     image: ${REGISTRY:-}chatqna:${BACKEND_TAG:-latest}
     profiles:

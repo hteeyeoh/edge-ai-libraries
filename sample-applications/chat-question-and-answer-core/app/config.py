@@ -18,6 +18,7 @@ class Settings(BaseSettings):
         SUPPORTED_FORMATS (set): Supported document file formats.
         DEBUG (bool): Flag to enable or disable debug mode.
         HF_ACCESS_TOKEN (str): Hugging Face access token for model downloads.
+        MODEL_BACKEND (str): Backend for model serving, e.g., "ollama" or "openvino".
         EMBEDDING_MODEL_ID (str): Model ID for embeddings.
         RERANKER_MODEL_ID (str): Model ID for reranker.
         LLM_MODEL_ID (str): Model ID for large language model.
@@ -26,7 +27,9 @@ class Settings(BaseSettings):
         RERANKER_DEVICE (str): Device to run reranker model on.
         LLM_DEVICE (str): Device to run LLM on.
         MAX_TOKENS (int): Maximum number of tokens for LLM responses.
-        ENABLE_RERANK (bool): Flag to enable or disable reranking.
+        _ENABLE_RERANK (bool): Flag to enable or disable reranking.
+        _SEARCH_METHOD (str): Search method for retriever (e.g., "mmr").
+        _FETCH_K (int): Number of documents to fetch for retriever.
         _CACHE_DIR (str): Directory for model cache (private).
         _HF_DATASETS_CACHE (str): Directory for Hugging Face datasets cache (private).
         _TMP_FILE_PATH (str): Temporary file path for documents (private).
@@ -44,6 +47,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
 
     HF_ACCESS_TOKEN: str = ""
+    MODEL_BACKEND: str = ""
     EMBEDDING_MODEL_ID: str = ""
     RERANKER_MODEL_ID: str = ""
     LLM_MODEL_ID: str = ""
@@ -52,10 +56,13 @@ class Settings(BaseSettings):
     RERANKER_DEVICE: str = "CPU"
     LLM_DEVICE: str = "CPU"
     MAX_TOKENS: int = 1024
-    ENABLE_RERANK: bool = True
 
     # These fields will not be affected by environment variables
+    _ENABLE_RERANK: bool = PrivateAttr(True)
+    _SEARCH_METHOD: str = PrivateAttr("mmr")
+    _FETCH_K: int = PrivateAttr(10)
     _CACHE_DIR: str = PrivateAttr("/tmp/model_cache")
+    _OLLAMA_CACHE_DIR: str = PrivateAttr("/tmp/ollama_model_cache")
     _HF_DATASETS_CACHE: str = PrivateAttr("/tmp/model_cache")
     _TMP_FILE_PATH: str = PrivateAttr("/tmp/chatqna/documents")
     _DEFAULT_MODEL_CONFIG: str = PrivateAttr("/tmp/model_config/default_model.yaml")
@@ -89,15 +96,54 @@ class Settings(BaseSettings):
                 if hasattr(self, key):
                     setattr(self, key, value)
 
-        self._validate_model_ids()
-
+        self._validate_backend_settings()
         self._check_and_validate_prompt_template()
 
-    def _validate_model_ids(self):
-        for model_name in ["EMBEDDING_MODEL_ID", "RERANKER_MODEL_ID", "LLM_MODEL_ID"]:
-            model_id = getattr(self, model_name)
-            if not model_id:
-                raise ValueError(f"{model_name} must not be an empty string.")
+
+    def _validate_backend_settings(self):
+        if not self.MODEL_BACKEND:
+            raise ValueError("MODEL_BACKEND must not be an empty string.")
+
+        backend = self.MODEL_BACKEND.lower()
+
+        if backend == "openvino":
+            self._ENABLE_RERANK = True
+
+            # Validate required model IDs
+            for model_name in ["EMBEDDING_MODEL_ID", "RERANKER_MODEL_ID", "LLM_MODEL_ID"]:
+                model_id = getattr(self, model_name)
+                if not model_id:
+                    raise ValueError(f"{model_name} must not be an empty string for 'openvino' backend.")
+
+        elif backend == "ollama":
+            self._ENABLE_RERANK = False
+
+            # Validate that all devices are set to "CPU" as ollama currently only enabled for CPU
+            invalid_devices = [
+                attr for attr in ["EMBEDDING_DEVICE", "RERANKER_DEVICE", "LLM_DEVICE"]
+                if getattr(self, attr, "") != "CPU"
+            ]
+
+            if invalid_devices:
+                raise ValueError(
+                    f"When MODEL_BACKEND is 'ollama', the following devices must be set to 'CPU': {', '.join(invalid_devices)}"
+                )
+
+            # Handle RERANKER_MODEL_ID
+            if self.RERANKER_MODEL_ID:
+                print("WARNING - RERANKER_MODEL_ID is ignored when MODEL_BACKEND is 'ollama'. Setting it to empty.")
+                self.RERANKER_MODEL_ID = ""
+            else:
+                print("INFO - MODEL_BACKEND is 'ollama'. Reranker model is not supported.")
+
+            # Validate required model IDs (excluding reranker)
+            for model_name in ["EMBEDDING_MODEL_ID", "LLM_MODEL_ID"]:
+                model_id = getattr(self, model_name)
+                if not model_id:
+                    raise ValueError(f"{model_name} must not be an empty string for 'ollama' backend.")
+
+        else:
+            raise ValueError(f"Unsupported MODEL_BACKEND '{self.MODEL_BACKEND}'. Only 'openvino' and 'ollama' are supported.")
 
     def _check_and_validate_prompt_template(self):
         if not self.PROMPT_TEMPLATE:
