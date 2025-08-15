@@ -8,8 +8,9 @@ from optimum.intel import (
     OVModelForSequenceClassification,
     OVModelForCausalLM,
 )
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, AutoModelForCausalLM
 from openvino_tokenizers import convert_tokenizer
+from peft import PeftModel
 
 
 def login_to_huggingface(token: str):
@@ -35,6 +36,37 @@ def login_to_huggingface(token: str):
         logger.info(f"Logged in successfully as {user_info['name']}")
     else:
         logger.error("Login failed.")
+
+
+def download_adapter(adapter_id: str , cache_dir: str):
+    adapter_path = snapshot_download(repo_id=adapter_id, cache_dir=cache_dir)
+    logger.info(f"adapter downloaded to : {adapter_path}")
+
+def load_and_merge_adapter_convert(base_model_id: str, adapter_id: str, cache_dir: str):
+    merge_model_name = "llama3.1-8b-with-adapter"
+    merged_model_path = os.path.join(cache_dir, merge_model_name)
+
+    # === Step 1: Load base model and LoRA adapter ===
+    tokenizer = AutoTokenizer.from_pretrained(base_model_id)
+    model = AutoModelForCausalLM.from_pretrained(base_model_id)
+    model = PeftModel.from_pretrained(model, adapter_id)
+
+    # === Step 2: Merge LoRA weights ===
+    model = model.merge_and_unload()
+
+    # === Step 3: Save merged model ===
+    model.save_pretrained(merged_model_path)
+    tokenizer.save_pretrained(merged_model_path)
+
+
+    # === Step 4: Convert to OpenVINO IR format ===
+    ov_model = OVModelForCausalLM.from_pretrained(
+        merged_model_path,
+        export=True,
+        weight_format="int8"
+    )
+    ov_model.save_pretrained(merged_model_path)
+
 
 
 def download_huggingface_model(model_id: str, cache_dir: str):

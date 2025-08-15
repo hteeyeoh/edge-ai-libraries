@@ -1,5 +1,5 @@
 from .config import config
-from .utils import login_to_huggingface, download_huggingface_model, convert_model
+from .utils import login_to_huggingface, download_huggingface_model, convert_model, download_adapter, load_and_merge_adapter_convert
 from .document import load_file_document
 from .logger import logger
 from langchain_community.vectorstores import FAISS
@@ -23,16 +23,22 @@ if os.getenv("RUN_TEST", "").lower() != "true":
     # login huggingface
     login_to_huggingface(config.HF_ACCESS_TOKEN)
 
+    download_adapter(adapter_id="asanchez75/Llama3.1-8b-mcq-lora",cache_dir=config._CACHE_DIR)
+
     # Download convert the model to openvino optimized
     download_huggingface_model(config.EMBEDDING_MODEL_ID, config._CACHE_DIR)
     download_huggingface_model(config.RERANKER_MODEL_ID, config._CACHE_DIR)
     download_huggingface_model(config.LLM_MODEL_ID, config._CACHE_DIR)
 
+
     # Convert to openvino IR
     convert_model(config.EMBEDDING_MODEL_ID, config._CACHE_DIR, "embedding")
     convert_model(config.RERANKER_MODEL_ID, config._CACHE_DIR, "reranker")
-    convert_model(config.LLM_MODEL_ID, config._CACHE_DIR, "llm")
+    # convert_model(config.LLM_MODEL_ID, config._CACHE_DIR, "llm")
 
+    # test load and merge adapter and convert
+    if not os.path.exists(f"{config._CACHE_DIR}/llama3.1-8b-with-adapter"):
+        load_and_merge_adapter_convert(config.LLM_MODEL_ID, "asanchez75/Llama3.1-8b-mcq-lora", config._CACHE_DIR)
 
     template = config.PROMPT_TEMPLATE
 
@@ -54,7 +60,8 @@ if os.getenv("RUN_TEST", "").lower() != "true":
 
     # Initialize LLM
     llm = HuggingFacePipeline.from_model_id(
-        model_id=f"{config._CACHE_DIR}/{config.LLM_MODEL_ID}",
+        # model_id=f"{config._CACHE_DIR}/{config.LLM_MODEL_ID}",
+        model_id=f"{config._CACHE_DIR}/llama3.1-8b-with-adapter",
         task="text-generation",
         backend="openvino",
         model_kwargs={
