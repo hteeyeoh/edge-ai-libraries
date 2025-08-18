@@ -1,5 +1,6 @@
 from .config import config
-from .utils import login_to_huggingface, download_huggingface_model, convert_model, download_adapter, load_and_merge_adapter_convert
+from .utils import login_to_huggingface, download_huggingface_model, convert_model
+#, download_adapter, load_and_merge_adapter_convert
 from .document import load_file_document
 from .logger import logger
 from langchain_community.vectorstores import FAISS
@@ -7,7 +8,7 @@ from langchain_community.embeddings import OpenVINOBgeEmbeddings
 from langchain_community.document_compressors.openvino_rerank import OpenVINOReranker
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain_huggingface import HuggingFacePipeline
-from langchain_core.runnables import RunnablePassthrough
+from langchain_core.runnables import RunnablePassthrough, Runnable
 from langchain_core.output_parsers import StrOutputParser
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.prompts import ChatPromptTemplate
@@ -23,7 +24,7 @@ if os.getenv("RUN_TEST", "").lower() != "true":
     # login huggingface
     login_to_huggingface(config.HF_ACCESS_TOKEN)
 
-    download_adapter(adapter_id="asanchez75/Llama3.1-8b-mcq-lora",cache_dir=config._CACHE_DIR)
+    # download_adapter(adapter_id="asanchez75/Llama3.1-8b-mcq-lora",cache_dir=config._CACHE_DIR)
 
     # Download convert the model to openvino optimized
     download_huggingface_model(config.EMBEDDING_MODEL_ID, config._CACHE_DIR)
@@ -34,11 +35,11 @@ if os.getenv("RUN_TEST", "").lower() != "true":
     # Convert to openvino IR
     convert_model(config.EMBEDDING_MODEL_ID, config._CACHE_DIR, "embedding")
     convert_model(config.RERANKER_MODEL_ID, config._CACHE_DIR, "reranker")
-    # convert_model(config.LLM_MODEL_ID, config._CACHE_DIR, "llm")
+    convert_model(config.LLM_MODEL_ID, config._CACHE_DIR, "llm")
 
     # test load and merge adapter and convert
-    if not os.path.exists(f"{config._CACHE_DIR}/llama3.1-8b-with-adapter"):
-        load_and_merge_adapter_convert(config.LLM_MODEL_ID, "asanchez75/Llama3.1-8b-mcq-lora", config._CACHE_DIR)
+    # if not os.path.exists(f"{config._CACHE_DIR}/llama3.1-8b-with-adapter"):
+    #     load_and_merge_adapter_convert(config.LLM_MODEL_ID, "asanchez75/Llama3.1-8b-mcq-lora", config._CACHE_DIR)
 
     template = config.PROMPT_TEMPLATE
 
@@ -59,24 +60,47 @@ if os.getenv("RUN_TEST", "").lower() != "true":
     )
 
     # Initialize LLM
-    llm = HuggingFacePipeline.from_model_id(
-        # model_id=f"{config._CACHE_DIR}/{config.LLM_MODEL_ID}",
-        model_id=f"{config._CACHE_DIR}/llama3.1-8b-with-adapter",
-        task="text-generation",
-        backend="openvino",
-        model_kwargs={
-            "device": config.LLM_DEVICE,
-            "ov_config": {
-                "PERFORMANCE_HINT": "LATENCY",
-                "NUM_STREAMS": "1",
-                "CACHE_DIR": f"{config._CACHE_DIR}/{config.LLM_MODEL_ID}/model_cache",
-            },
-            "trust_remote_code": True,
-        },
-        pipeline_kwargs={"max_new_tokens": config.MAX_TOKENS},
+#     llm = HuggingFacePipeline.from_model_id(
+#         # model_id=f"{config._CACHE_DIR}/{config.LLM_MODEL_ID}",
+#         model_id=f"{config._CACHE_DIR}/llama3.1-8b-with-adapter",
+#         task="text-generation",
+#         backend="openvino",
+#         model_kwargs={
+#             "device": config.LLM_DEVICE,
+#             "ov_config": {
+#                 "PERFORMANCE_HINT": "LATENCY",
+#                 "NUM_STREAMS": "1",
+#                 "CACHE_DIR": f"{config._CACHE_DIR}/{config.LLM_MODEL_ID}/model_cache",
+#             },
+#             "trust_remote_code": True,
+#         },
+#         pipeline_kwargs={"max_new_tokens": config.MAX_TOKENS},
+#     )
+#     if llm.pipeline.tokenizer.eos_token_id:
+#         llm.pipeline.tokenizer.pad_token_id = llm.pipeline.tokenizer.eos_token_id
+
+    import openvino_genai as ov_genai
+
+    class OpenVinoLLM(Runnable):
+        def __init__(self, model_path: str, device: str = "CPU", adapter_path: str = None):
+            logger.info("Initialized with ov_genai")
+            self.pipe = ov_genai.LLMPipeline(model_path, device)
+            if adapter_path:
+                self.adapter = ov_genai.Adapter(adapter_path)
+            ov_config = ov_genai.GenerationConfig()
+            ov_config.max_new_tokens = 100
+            logger.info(self.pipe.generate("What is OpenVINO?", ov_config))
+            return self.pipe
+
+        def invoke(self, input: str, config=None, **kwargs) -> str:
+            max_tokens = 1024
+            return self.pipe.generate(prompt=input, max_new_tokens=max_tokens, adapters=self.adapter)
+
+    llm = OpenVinoLLM(
+        model_path=f"{config._CACHE_DIR}/{config.LLM_MODEL_ID}",
+        device=config.LLM_DEVICE,
+        adapter_path=f"{config._CACHE_DIR}/models--asanchez75--Llama3.1-8b-mcq-lora/snapshots/16213ff089863c5845257e79835c2815531b85b2/adapter_model.safetensors",
     )
-    if llm.pipeline.tokenizer.eos_token_id:
-        llm.pipeline.tokenizer.pad_token_id = llm.pipeline.tokenizer.eos_token_id
 else:
     logger.info("Bypassing to mock these functions because RUN_TEST is set to 'True' to run pytest unit test.")
 
@@ -151,7 +175,7 @@ def build_chain(retriever=None):
             "question": RunnablePassthrough(),
         }
         | prompt
-        | llm
+        | llm.generate()
         | StrOutputParser()
     )
 

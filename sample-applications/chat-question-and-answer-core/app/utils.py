@@ -10,7 +10,8 @@ from optimum.intel import (
 )
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from openvino_tokenizers import convert_tokenizer
-from peft import PeftModel
+import subprocess
+# from peft import PeftModel
 
 
 def login_to_huggingface(token: str):
@@ -38,34 +39,34 @@ def login_to_huggingface(token: str):
         logger.error("Login failed.")
 
 
-def download_adapter(adapter_id: str , cache_dir: str):
-    adapter_path = snapshot_download(repo_id=adapter_id, cache_dir=cache_dir)
-    logger.info(f"adapter downloaded to : {adapter_path}")
+# def download_adapter(adapter_id: str , cache_dir: str):
+#     adapter_path = snapshot_download(repo_id=adapter_id, cache_dir=cache_dir)
+#     logger.info(f"adapter downloaded to : {adapter_path}")
 
-def load_and_merge_adapter_convert(base_model_id: str, adapter_id: str, cache_dir: str):
-    merge_model_name = "llama3.1-8b-with-adapter"
-    merged_model_path = os.path.join(cache_dir, merge_model_name)
+# def load_and_merge_adapter_convert(base_model_id: str, adapter_id: str, cache_dir: str):
+#     merge_model_name = "llama3.1-8b-with-adapter"
+#     merged_model_path = os.path.join(cache_dir, merge_model_name)
 
-    # === Step 1: Load base model and LoRA adapter ===
-    tokenizer = AutoTokenizer.from_pretrained(base_model_id)
-    model = AutoModelForCausalLM.from_pretrained(base_model_id)
-    model = PeftModel.from_pretrained(model, adapter_id)
+#     # === Step 1: Load base model and LoRA adapter ===
+#     tokenizer = AutoTokenizer.from_pretrained(base_model_id)
+#     model = AutoModelForCausalLM.from_pretrained(base_model_id)
+#     model = PeftModel.from_pretrained(model, adapter_id)
 
-    # === Step 2: Merge LoRA weights ===
-    model = model.merge_and_unload()
+#     # === Step 2: Merge LoRA weights ===
+#     model = model.merge_and_unload()
 
-    # === Step 3: Save merged model ===
-    model.save_pretrained(merged_model_path)
-    tokenizer.save_pretrained(merged_model_path)
+#     # === Step 3: Save merged model ===
+#     model.save_pretrained(merged_model_path)
+#     tokenizer.save_pretrained(merged_model_path)
 
 
-    # === Step 4: Convert to OpenVINO IR format ===
-    ov_model = OVModelForCausalLM.from_pretrained(
-        merged_model_path,
-        export=True,
-        weight_format="int8"
-    )
-    ov_model.save_pretrained(merged_model_path)
+#     # === Step 4: Convert to OpenVINO IR format ===
+#     ov_model = OVModelForCausalLM.from_pretrained(
+#         merged_model_path,
+#         export=True,
+#         weight_format="int8"
+#     )
+#     ov_model.save_pretrained(merged_model_path)
 
 
 
@@ -133,10 +134,26 @@ def convert_model(model_id: str, cache_dir: str, model_type: str):
             )
             reranker_model.save_pretrained(f"{cache_dir}/{model_id}")
         elif model_type == "llm":
-            llm_model = OVModelForCausalLM.from_pretrained(
-                model_id, export=True, weight_format="int8"
-            )
-            llm_model.save_pretrained(f"{cache_dir}/{model_id}")
+            # llm_model = OVModelForCausalLM.from_pretrained(
+            #     model_id, export=True, weight_format="int8"
+            # )
+            # llm_model.save_pretrained(f"{cache_dir}/{model_id}")
+
+            command = [
+                    "optimum-cli", "export", "openvino",
+                    "--model", model_id,
+                    "--weight-format", "int8",
+                    f"{cache_dir}/{model_id}",
+                ]
+
+            result = subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            print("STDOUT:\n", result.stdout)
+            print("STDERR:\n", result.stderr)
+
+            print("✅ Model export successful.")
+
+
+
 
 
 def get_available_devices():
