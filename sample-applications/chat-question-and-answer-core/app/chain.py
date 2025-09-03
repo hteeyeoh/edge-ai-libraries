@@ -14,6 +14,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.prompts import ChatPromptTemplate
 import os
 import pandas as pd
+from typing import List
+from .ov_langchain_helper import OpenVINOLLM
 
 vectorstore = None
 
@@ -60,47 +62,47 @@ if os.getenv("RUN_TEST", "").lower() != "true":
     )
 
     # Initialize LLM
-#     llm = HuggingFacePipeline.from_model_id(
-#         # model_id=f"{config._CACHE_DIR}/{config.LLM_MODEL_ID}",
-#         model_id=f"{config._CACHE_DIR}/llama3.1-8b-with-adapter",
-#         task="text-generation",
-#         backend="openvino",
-#         model_kwargs={
-#             "device": config.LLM_DEVICE,
-#             "ov_config": {
-#                 "PERFORMANCE_HINT": "LATENCY",
-#                 "NUM_STREAMS": "1",
-#                 "CACHE_DIR": f"{config._CACHE_DIR}/{config.LLM_MODEL_ID}/model_cache",
-#             },
-#             "trust_remote_code": True,
-#         },
-#         pipeline_kwargs={"max_new_tokens": config.MAX_TOKENS},
-#     )
-#     if llm.pipeline.tokenizer.eos_token_id:
-#         llm.pipeline.tokenizer.pad_token_id = llm.pipeline.tokenizer.eos_token_id
+    if config.ENABLE_ADAPTER:
+        logger.info("Initialize LLM with adapter in LLM")
+        import openvino_genai as ov_genai
 
-    import openvino_genai as ov_genai
+        # Initialize pipeline with adapters
+        # TODO: Remove hardcoded adapter path, make it configurable
+        adapter_config = ov_genai.AdapterConfig()
 
-    class OpenVinoLLM(Runnable):
-        def __init__(self, model_path: str, device: str = "CPU", adapter_path: str = None):
-            logger.info("Initialized with ov_genai")
-            self.pipe = ov_genai.LLMPipeline(model_path, device)
-            if adapter_path:
-                self.adapter = ov_genai.Adapter(adapter_path)
-            ov_config = ov_genai.GenerationConfig()
-            ov_config.max_new_tokens = 100
-            logger.info(self.pipe.generate("What is OpenVINO?", ov_config))
-            return self.pipe
+        adapter1 = ov_genai.Adapter(f"{config._CACHE_DIR}/models--asanchez75--Llama3.1-8b-mcq-lora/snapshots/16213ff089863c5845257e79835c2815531b85b2/adapter_model.safetensors")
 
-        def invoke(self, input: str, config=None, **kwargs) -> str:
-            max_tokens = 1024
-            return self.pipe.generate(prompt=input, max_new_tokens=max_tokens, adapters=self.adapter)
+        adapter_config.add(adapter1, alpha=0.5)
 
-    llm = OpenVinoLLM(
-        model_path=f"{config._CACHE_DIR}/{config.LLM_MODEL_ID}",
-        device=config.LLM_DEVICE,
-        adapter_path=f"{config._CACHE_DIR}/models--asanchez75--Llama3.1-8b-mcq-lora/snapshots/16213ff089863c5845257e79835c2815531b85b2/adapter_model.safetensors",
-    )
+
+        llm = OpenVINOLLM.from_model_path(
+           model_path=f"{config._CACHE_DIR}/{config.LLM_MODEL_ID}",
+           device=config.LLM_DEVICE,
+           adapters=adapter_config
+        )
+
+        llm.config.max_new_tokens = config.MAX_TOKENS
+    else:
+        logger.info("Initialize LLM without adapter")
+        llm = HuggingFacePipeline.from_model_id(
+            model_id=f"{config._CACHE_DIR}/{config.LLM_MODEL_ID}",
+            #model_id=f"{config._CACHE_DIR}/llama3.1-8b-with-adapter",
+            task="text-generation",
+            backend="openvino",
+            model_kwargs={
+                "device": config.LLM_DEVICE,
+                "ov_config": {
+                    "PERFORMANCE_HINT": "LATENCY",
+                    "NUM_STREAMS": "1",
+                    "CACHE_DIR": f"{config._CACHE_DIR}/{config.LLM_MODEL_ID}/model_cache",
+                },
+                "trust_remote_code": True,
+            },
+            pipeline_kwargs={"max_new_tokens": config.MAX_TOKENS},
+        )
+        if llm.pipeline.tokenizer.eos_token_id:
+            llm.pipeline.tokenizer.pad_token_id = llm.pipeline.tokenizer.eos_token_id
+
 else:
     logger.info("Bypassing to mock these functions because RUN_TEST is set to 'True' to run pytest unit test.")
 
@@ -175,7 +177,7 @@ def build_chain(retriever=None):
             "question": RunnablePassthrough(),
         }
         | prompt
-        | llm.generate()
+        | llm
         | StrOutputParser()
     )
 

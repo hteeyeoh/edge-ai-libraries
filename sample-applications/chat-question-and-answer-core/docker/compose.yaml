@@ -36,6 +36,7 @@ services:
       https_proxy: ${https_proxy}
       no_proxy: ${no_proxy}
       HF_ACCESS_TOKEN: ${HF_ACCESS_TOKEN}
+      ENABLE_ADAPTER: ${ENABLE_ADAPTER:-false}
     ports:
       - "8888:8888"
     volumes:

@@ -120,37 +120,39 @@ def convert_model(model_id: str, cache_dir: str, model_type: str):
         logger.info(f"Converting {model_id} model to OpenVINO format...")
         hf_tokenizer = AutoTokenizer.from_pretrained(model_id)
         hf_tokenizer.save_pretrained(f"{cache_dir}/{model_id}")
-        ov_tokenizer = convert_tokenizer(hf_tokenizer, add_special_tokens=False)
+        ov_tokenizer, ov_detokenizer = convert_tokenizer(hf_tokenizer, with_detokenizer=True, add_special_tokens=False)
         ov.save_model(ov_tokenizer, f"{cache_dir}/{model_id}/openvino_tokenizer.xml")
+        ov.save_model(ov_detokenizer, f"{cache_dir}/{model_id}/openvino_detokenizer.xml")
+
 
         if model_type == "embedding":
             embedding_model = OVModelForFeatureExtraction.from_pretrained(
-                model_id, export=True
+                model_id, export=True, trust_remote_code=True
             )
             embedding_model.save_pretrained(f"{cache_dir}/{model_id}")
         elif model_type == "reranker":
             reranker_model = OVModelForSequenceClassification.from_pretrained(
-                model_id, export=True
+                model_id, export=True, trust_remote_code=True
             )
             reranker_model.save_pretrained(f"{cache_dir}/{model_id}")
         elif model_type == "llm":
-            # llm_model = OVModelForCausalLM.from_pretrained(
-            #     model_id, export=True, weight_format="int8"
-            # )
-            # llm_model.save_pretrained(f"{cache_dir}/{model_id}")
+            llm_model = OVModelForCausalLM.from_pretrained(
+                model_id, export=True, weight_format="int8", trust_remote_code=True
+            )
+            llm_model.save_pretrained(f"{cache_dir}/{model_id}")
 
-            command = [
-                    "optimum-cli", "export", "openvino",
-                    "--model", model_id,
-                    "--weight-format", "int8",
-                    f"{cache_dir}/{model_id}",
-                ]
+            #command = [
+            #        "optimum-cli", "export", "openvino",
+            #        "--model", model_id,
+            #        "--weight-format", "int8",
+            #        f"{cache_dir}/{model_id}",
+            #    ]
 
-            result = subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            print("STDOUT:\n", result.stdout)
-            print("STDERR:\n", result.stderr)
+            #result = subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            #print("STDOUT:\n", result.stdout)
+            #print("STDERR:\n", result.stderr)
 
-            print("✅ Model export successful.")
+            #print("✅ Model export successful.")
 
 
 

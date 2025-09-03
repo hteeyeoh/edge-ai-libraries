@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     LLM_DEVICE: str = "CPU"
     MAX_TOKENS: int = 1024
     ENABLE_RERANK: bool = True
+    ENABLE_ADAPTER: bool = False
 
     # These fields will not be affected by environment variables
     _CACHE_DIR: str = PrivateAttr("/tmp/model_cache")
