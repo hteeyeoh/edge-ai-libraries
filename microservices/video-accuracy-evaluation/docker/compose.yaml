@@ -1,0 +1,25 @@
+# Copyright (C) 2025 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+#
+services:
+  video-accuracy-evaluation:
+    image: vss-eval:latest
+    container_name: vss-acc-eval
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+    environment:
+      http_proxy: ${http_proxy}
+      https_proxy: ${https_proxy}
+      no_proxy: ${no_proxy}
+      SBERT_MODEL_ID: ${SBERT_MODEL_ID}
+    group_add:
+      - ${USER_GROUP_ID-1000}
+    ports:
+      - "9000:9000"
+    volumes:
+      - "${MODEL_CACHE_PATH}:/tmp/model_cache"
+
+networks:
+  default:
+    driver: bridge
