@@ -23,3 +23,4 @@ fi
 export USER_GROUP_ID=$(id -g ${USER})
 export SBERT_MODEL_ID="all-mpnet-base-v2"
 export MODEL_CACHE_PATH="$MODEL_CACHE_PATH"
+export APP_BACKEND_URL="http://vss-acc-eval:9000/v1/eval"

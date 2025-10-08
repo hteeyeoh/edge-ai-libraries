@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 services:
-  video-accuracy-evaluation:
+  vss-acc-eval:
     image: vss-eval:latest
     container_name: vss-acc-eval
     build:
@@ -19,6 +19,22 @@ services:
       - "9000:9000"
     volumes:
       - "${MODEL_CACHE_PATH}:/tmp/model_cache"
+
+  vss-acc-eval-ui:
+    image: vss-eval-ui:latest
+    container_name: vss-acc-eval-ui
+    build:
+      context: ../ui/
+      dockerfile: docker/Dockerfile
+    environment:
+      http_proxy: ${http_proxy}
+      https_proxy: ${https_proxy}
+      no_proxy: ${no_proxy}, vss-acc-eval, vss-acc-eval-ui
+      APP_BACKEND_URL: ${APP_BACKEND_URL}
+    ports:
+      - "5174:7860"
+    depends_on:
+      - vss-acc-eval
 
 networks:
   default:
