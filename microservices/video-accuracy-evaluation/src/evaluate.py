@@ -197,7 +197,7 @@ class Evaluator:
             reference (str): The reference sentence to compare against.
 
         Returns:
-            str: The NLI label indicating the relationship between the sentences: "entailment", "neutral", or "contradiction".
+            dict: A dictionary containing the reference sentence, generated sentence, and the factual consistency label.
         """
         logger.info("Calculating factual consistency...")
 
@@ -217,7 +217,7 @@ class Evaluator:
         return {
             "reference": reference,
             "generated": generated,
-            "label": label
+            "factual_consistency": label
         }
 
     def _evaluate_summaries(self, reference: str="", generated: str="") -> list[Dict[str, Any]]:
@@ -237,7 +237,7 @@ class Evaluator:
                 "reference_sentence": str,
                 "matched_sentence": str,
                 "similarity_score": float,
-                "nli_label": str
+                "factual_consistency": str
             - A summary dictionary with factual consistency statistics:
                     "total_sentences_compared": int,
                     "entailment": int,
@@ -270,14 +270,14 @@ class Evaluator:
             best_match_sentence = gen_sentences[best_match_idx]
 
             result = self._evaluate_factual_consistency(best_match_sentence, ref_sentence)
-            label = result["label"]
+            label = result["factual_consistency"]
 
             results.append(
                 {
                     "reference_sentence": ref_sentence,
                     "matched_sentence":best_match_sentence,
                     "similarity_score": round(float(cosine_scores[best_match_idx].item()), 4),
-                    "nli_label": label
+                    "factual_consistency": label
                 }
             )
 
