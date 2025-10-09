@@ -73,6 +73,8 @@ def submit_file(file):
                 comparisons = data
 
             df = pd.DataFrame(comparisons)
+            df.insert(0, "No.", range(1, len(df) + 1))
+
             summary_text = "\n".join([f"{k}: {v}" for k, v in summary.items()])
             return df, summary_text
 

@@ -298,14 +298,14 @@ class Evaluator:
         results.append({
             "Factual Consistency Summary": {
                 "total_sentences_compared": total,
-                "total_cosine_score": round(total_cosine_score, 4),
+                "total_cosine_score": f"{round(total_cosine_score, 4)}/{total}",
                 "entailment": entailment_count,
                 "neutral": neutral_count,
                 "contradiction": contradiction_count,
                 "entailment_ratio": round(entailment_ratio, 2),
                 "neutral_ratio": round(neutral_ratio, 2),
                 "contradiction_ratio": round(contradiction_ratio, 2),
-                "average_cosine_score": round(total_cosine_score / total, 2) if total > 0 else 0
+                "average_cosine_score": f"{round(total_cosine_score / total, 2)}/1.0" if total > 0 else 0
             }
         })
 
