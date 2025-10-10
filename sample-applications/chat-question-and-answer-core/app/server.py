@@ -20,6 +20,7 @@ from .chain import (
 )
 from .document import validate_document, save_document
 from .utils import get_available_devices, get_device_property
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 app = FastAPI(root_path="/v1/chatqna")
 
@@ -318,6 +319,8 @@ async def query_chat(request: ChatRequest):
             process_query(rag_chain, request.input), media_type="text/event-stream"
         )
 
+
+FastAPIInstrumentor.instrument_app(app)
 
 if __name__ == "__main__":
     uvicorn.run("app", host="0.0.0.0", port=8888)

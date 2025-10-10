@@ -100,3 +100,9 @@ export MODEL_CACHE_PATH="$MODEL_CACHE_PATH"
 
 export APP_BACKEND_URL="/v1/chatqna"
 export COMPOSE_PROFILES=$PROFILES
+
+# OpenTelemetry Configurations
+export OTLP_SERVICE_NAME=chatqna-core
+export OTLP_SERVICE_ENV=chatqna-core
+export OTEL_SERVICE_VERSION=1.0.0
+export OTLP_ENDPOINT="https://otel-collector.egai-dev.intel.com"

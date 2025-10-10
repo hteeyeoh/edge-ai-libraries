@@ -12,6 +12,10 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.prompts import ChatPromptTemplate
 import pandas as pd
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 
 config = Settings()
 vectorstore = None
@@ -81,6 +85,20 @@ llm = HuggingFacePipeline.from_model_id(
 if llm.pipeline.tokenizer.eos_token_id:
     llm.pipeline.tokenizer.pad_token_id = llm.pipeline.tokenizer.eos_token_id
 
+
+# Check if OTLP endpoint is set in environment variables
+otlp_endpoint = config.OTLP_ENDPOINT
+logger.info(f"OTLP Endpoint: {otlp_endpoint}")
+
+# Initialize OpenTelemetry
+trace.set_tracer_provider(TracerProvider())
+tracer = trace.get_tracer(__name__)
+
+if otlp_endpoint:
+    logger.info("OpenTelemetry is enabled with OTLP exporter.")
+    otlp_exporter = OTLPSpanExporter()
+    span_processor = BatchSpanProcessor(otlp_exporter)
+    trace.get_tracer_provider().add_span_processor(span_processor)
 
 def default_context(docs):
     """
