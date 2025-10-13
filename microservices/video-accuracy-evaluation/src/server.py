@@ -26,6 +26,7 @@ app.add_middleware(
 )
 
 evaluator = Evaluator(
+    bert_scorer_model_name=config.BERT_SCORER_MODEL_ID,
     sbert_model_name=config.SBERT_MODEL_ID,
     nli_model_name=config.NLI_MODEL_ID
 )
@@ -62,6 +63,22 @@ async def check_health():
 def get_semantic_score(input_data: EvaluateData):
     try:
         return evaluator._calculate_semantic_score(input_data.generated, input_data.reference)
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@app.post(
+    "/bert-score",
+    tags=["Evaluation APIs"],
+    summary="Get BERT score from the datasets",
+)
+def get_bert_score(input_data: EvaluateData):
+    try:
+        return evaluator._calculate_bert_score(input_data.generated, input_data.reference)
 
     except Exception as e:
         raise HTTPException(

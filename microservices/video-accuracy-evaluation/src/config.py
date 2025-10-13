@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     BASE_DIR: str = dirname(dirname(abspath(__file__)))
     DEBUG: bool = False
 
+    BERT_SCORER_MODEL_ID: str = "bert-base-uncased"
     SBERT_MODEL_ID: str = ""
     NLI_MODEL_ID:  str = "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli"
 

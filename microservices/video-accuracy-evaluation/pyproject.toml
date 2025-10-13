@@ -8,6 +8,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.10"
 beautifulsoup4 = "4.13.5"
+bert-score = "^0.3.13"
 fastapi = "0.116.1"
 markdown = "3.9"
 python-multipart = ">=0.0.18"
@@ -15,6 +16,7 @@ pydantic-settings = "2.10.1"
 rouge-score = "^0.1.2"
 sentence-transformers = "5.0.0"
 uvicorn = "0.35.0"
+#optax = "^0.1.6"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.3"

@@ -32,12 +32,14 @@ SAMPLE_MARKDOWN = """
 
 # Map dropdown options to API endpoints
 METRIC_ENDPOINTS = {
+    "bert-score": f"{APP_BACKEND_URL}/bert-score",
     "semantic-score": f"{APP_BACKEND_URL}/semantic-score",
     "rouge-score": f"{APP_BACKEND_URL}/rouge-score",
     "factual-consistency": f"{APP_BACKEND_URL}/factual-entailment"
 }
 
 METRIC_DESC= {
+    "bert-score": "BERTScore leverages pre-trained contextual embeddings from BERT and similar models to evaluate text generation quality. It captures semantic similarity between texts by comparing their token-level embeddings, providing a more nuanced assessment than traditional metrics.",
     "semantic-score": "Captures meaning alignment beyond exact words; handles paraphrasing and synonyms.",
     "rouge-score": "Recall-Oriented Understudy for Gisting Evaluation. Measures how much of the important content/events are captured in the summary.",
     "factual-consistency": "Determines logical relationships between two text pieces. Evaluates how texts relate to each other."
@@ -156,10 +158,10 @@ def create_ui():
                         generated_input = gr.Textbox(label="Generated Text", lines=4, placeholder="Enter generated text here...")
 
                 metric_selector = gr.Dropdown(
-                    choices=["semantic-score", "rouge-score", "factual-consistency"],
+                    choices=["bert-score", "semantic-score", "rouge-score", "factual-consistency"],
                     label="Select evaluation metric",
                     info="Available Metrics Provided for Evaluation",
-                    value="semantic-score",
+                    value="bert-score",
                     interactive=True
                 )
 

@@ -1,11 +1,11 @@
 from .config import config
 from .logger import logger
+from bert_score import BERTScorer
 from bs4 import BeautifulSoup
 from nltk.tokenize import sent_tokenize
 from rouge_score import rouge_scorer
 from sentence_transformers import SentenceTransformer, util
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-#from sklearn.metrics.pairwise import cosine_similarity
 from typing import Dict, Any
 import csv
 import markdown
@@ -16,11 +16,17 @@ import torch
 
 
 class Evaluator:
-    def __init__(self, sbert_model_name: str = None, nli_model_name: str = None):
+    def __init__(
+        self,
+        bert_scorer_model_name: str = None,
+        sbert_model_name: str = None,
+        nli_model_name: str = None
+    ):
         """
         Initialize the evaluator class.
 
         Args:
+            bert_scorer_model_name: BERT scorer model name
             sbert_model_name: Sentence transformer model name
             nli_model_name: Natural Language Inference model name
         """
@@ -28,6 +34,9 @@ class Evaluator:
         # Download necessary NLTK resources
         nltk.download('punkt')
         nltk.download('punkt_tab')
+
+        # Initialize bert-scorer model
+        self.bert_scorer = BERTScorer(model_type=bert_scorer_model_name)
 
         # Initialize the Sentence Transformer model
         self.sentence_model = SentenceTransformer(
@@ -65,25 +74,35 @@ class Evaluator:
 
         # Tensor output
         embeddings = self.sentence_model.encode([generated, reference], convert_to_tensor=True)
-        # NumPy output
-        # embeddings = self.sentence_model.encode([generated, reference])
+
         similarity = float(util.cos_sim(embeddings[0], embeddings[1]).item())
-
-        gen_len = len(generated.split())
-        ref_len = len(reference.split())
-        length_ratio = gen_len / ref_len if ref_len > 0 else 1
-
-        precision = float(similarity / max(length_ratio, 1.0))
-        recall = float(similarity * min(length_ratio, 1.0))
-        f1 = float(2 * (precision * recall) / (precision + recall)) if (precision + recall) > 0 else 0.0
 
         return {
             "reference": reference,
             "generated": generated,
-            "precision": round(min(precision, 1.0), 4),
-            "recall": round(min(recall, 1.0), 4),
-            "f1_score": round(f1, 4),
-            "similarity": round(similarity, 4)
+            "semantic_similarity_score": round(similarity, 4)
+        }
+
+
+    def _calculate_bert_score(self, generated: str = "", reference: str = "") -> Dict[str, Any]:
+        """
+        Calculate BERTScore between generated and reference text.
+
+        Args:
+            generated (str): The generated text to be evaluated.
+            reference (str): The reference text to compare against.
+
+        Returns:
+            dict: A dictionary containing precision, recall, and F1 score.
+        """
+        logger.info("Calculating BERT score...")
+        P, R, F1 = self.bert_scorer.score([generated], [reference])
+        return {
+            "reference": reference,
+            "generated": generated,
+            "precision": round(float(P[0].item()), 4),
+            "recall": round(float(R[0].item()), 4),
+            "f1_score": round(float(F1[0].item()), 4)
         }
 
 
