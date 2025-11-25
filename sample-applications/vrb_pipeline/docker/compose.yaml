@@ -1,0 +1,134 @@
+# Copyright (C) 2025 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+services:
+  rabbitmq-service:
+    image: rabbitmq:3.8-management
+    container_name: rabbitmq-service
+    ports:
+      - "${RABBITMQ_AMQP_HOST_PORT:-5672}:5672" # AMQP port
+      - "${RABBITMQ_MANAGEMENT_UI_HOST_PORT:-15672}:15672" # Management UI port
+      - "${RABBITMQ_MQTT_HOST_PORT:-1883}:1883" # MQTT(TCP) port
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "status" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    # By default, RabbitMQ does not enable MQTT or Web MQTT plugins.
+    # This command ensures those protocols are available when the container starts, so clients can connect using MQTT or WebSocket MQTT.
+    command: >
+      sh -c "rabbitmq-plugins enable --offline rabbitmq_mqtt rabbitmq_web_mqtt && rabbitmq-server"
+    volumes:
+      - ${RABBITMQ_CONFIG}:/etc/rabbitmq/rabbitmq.conf
+    networks:
+      - vrb_network
+
+  vlm-openvino-serving:
+    image: ${REGISTRY:-}vlm-openvino-serving:${TAG:-latest}
+    container_name: vlm-openvino-serving
+    ports:
+      - "${VLM_SERVICE_PORT}:8000"
+    ipc: host
+    environment:
+      no_proxy_env: ${no_proxy_env},${HOST_IP},localhost,multimodal-embedding-serving
+      no_proxy: ${no_proxy_env},${HOST_IP},localhost,multimodal-embedding-serving
+      http_proxy: ${http_proxy}
+      https_proxy: ${https_proxy}
+      VLM_MODEL_NAME: ${VLM_MODEL_NAME}
+      VLM_COMPRESSION_WEIGHT_FORMAT: ${VLM_COMPRESSION_WEIGHT_FORMAT}
+      VLM_DEVICE: ${VLM_DEVICE}
+      VLM_SEED: ${VLM_SEED}
+      WORKERS: ${WORKERS:-1}
+      VLM_MAX_COMPLETION_TOKENS: ${VLM_MAX_COMPLETION_TOKENS}
+      HUGGINGFACE_TOKEN: ${HUGGINGFACE_TOKEN}
+      OV_CONFIG: ${OV_CONFIG}
+      VLM_LOG_LEVEL: ${VLM_LOG_LEVEL:-info}
+      OPENVINO_LOG_LEVEL: ${VLM_OPENVINO_LOG_LEVEL:-1}
+      VLM_ACCESS_LOG_FILE: ${VLM_ACCESS_LOG_FILE:-/dev/null}
+    restart: unless-stopped
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - ${USER_GROUP_ID:-1000}
+      - ${VIDEO_GROUP_ID:-44}
+      - ${RENDER_GROUP_ID:-1002}
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:8000/health || exit 1" ]
+      interval: 10s
+      timeout: 10s
+      retries: 40
+      start_period: 10s
+    networks:
+      - vrb_network
+    volumes:
+      - ov-models:/home/appuser/.cache/huggingface
+      - ov-models:/app/ov-model
+
+  multimodal-embedding-serving:
+    image: ${REGISTRY:-}multimodal-embedding-serving:${TAG:-latest}
+    container_name: multimodal-embedding-serving
+    ports:
+      - '${EMBEDDING_SERVER_PORT:-9777}:8000'
+    ipc: host
+    environment:
+      no_proxy: ${no_proxy},localhost,vlm-openvino-serving
+      no_proxy_env: ${no_proxy},localhost,vlm-openvino-serving
+      http_proxy: ${http_proxy}
+      https_proxy: ${https_proxy}
+      EMBEDDING_MODEL_NAME: ${EMBEDDING_MODEL_NAME}
+      EMBEDDING_DEVICE: ${EMBEDDING_DEVICE}
+      EMBEDDING_USE_OV: ${EMBEDDING_USE_OV}
+      EMBEDDING_OV_MODELS_DIR: ${EMBEDDING_OV_MODELS_DIR:-/app/ov_models}
+      DEFAULT_START_OFFSET_SEC: ${DEFAULT_START_OFFSET_SEC}
+      DEFAULT_CLIP_DURATION: ${DEFAULT_CLIP_DURATION:--1}
+      DEFAULT_NUM_FRAMES: ${DEFAULT_NUM_FRAMES}
+      OV_PERFORMANCE_MODE: ${OV_PERFORMANCE_MODE:-THROUGHPUT}
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - ${USER_GROUP_ID:-1000}
+      - ${VIDEO_GROUP_ID:-44}
+      - ${RENDER_GROUP_ID:-1002}
+    restart: unless-stopped
+    healthcheck:
+      test: [ 'CMD-SHELL', 'curl -f http://localhost:8000/health || exit 1' ]
+      interval: 10s
+      timeout: 10s
+      retries: 40
+      start_period: 5s
+    networks:
+      - vrb_network
+    volumes:
+      - ov-models:/home/appuser/.cache/huggingface
+      # - data-prep:/tmp/dataprep
+      - ov-models:${EMBEDDING_OV_MODELS_DIR:-/app/ov_models}
+
+  vdms-vector-db:
+    image: intellabs/vdms:v2.11.0
+    ipc: host
+    environment:
+      - OVERRIDE_db_root_path=/db
+      - OVERRIDE_images_path=/db/images
+      - OVERRIDE_descriptors_path=/db/descriptors
+      - OVERRIDE_blobs_path=/db/blobs
+      - OVERRIDE_pmgd_path=/db/graph
+    ports:
+      - '${VDMS_VDB_HOST_PORT}:55555'
+    volumes:
+      - vdms-db:/db
+    networks:
+      - vrb_network
+
+volumes:
+  ov-models:
+    driver: local
+  vdms-db:
+    driver: local
+
+networks:
+  vrb_network:
+    driver: bridge
