@@ -7,9 +7,6 @@ import json
 import logging
 import os
 import numpy as np
-
-from minio_client import MinioClient
-from rabbitmq_mqtt_client import RabbitMQMQTTClient
 from PIL import Image
 
 
@@ -22,49 +19,15 @@ class Publisher:
             logger.info("Initializing Publisher via gvapython extension...")
 
             self.get_env_variables()
-            self.topic: str = kwargs.get("topic")
-            self.video_identifier: str = kwargs.get("video_identifier")
-            self.bucket_name: str = kwargs.get("minio_bucket")
+            self.interested: list = kwargs.get("interested")
+            print(self.interested)
 
             # Initialize messages dictionary
             self.messages = {}
-            self.frame_id = 0
+            self.frame_id = 1
 
-            if not self.topic or not self.video_identifier or not self.bucket_name:
-                logger.error("Missing required arguments: topic, video_identifier or bucket_name")
-                raise Exception("Missing required arguments: topic, video_identifier or bucket_name")
-
-            # Initialize connection to RabbitMQ and Minio Clients
-            logger.info("Connecting to RabbitMQ MQTT Client...")
-            # self.rabbitmq_client = RabbitMQMQTTClient(
-            #     self.mqtt_host,
-            #     self.mqtt_port,
-            #     self.mqtt_username,
-            #     self.mqtt_passwd
-            # )
-
-
-            self.rabbitmq_client = RabbitMQMQTTClient(
-                broker=self.mqtt_host,
-                port=self.mqtt_port,             # 1883 (plaintext) or 8883 (TLS)
-                username=self.mqtt_username,
-                password=self.mqtt_passwd,
-                use_tls=False,                   # set True if using 8883
-                # tls_kwargs={...},              # provide CA/cert/key if TLS is enabled
-                connect_timeout=10.0,
-            )
-
-
-            if not self.rabbitmq_client.is_connected():
-                logger.error(f"Failed to connect to RabbitMQ MQTT Broker - {self.mqtt_host}:{self.mqtt_port}")
-            #    return
-
-            logger.info("Connecting to Minio Client...")
-            self.minio_client = MinioClient.get_client(
-                minio_server=self.minio_server,
-                access_key=self.minio_username,
-                secret_key=self.minio_passwd
-            )
+            self.best_frames = {}
+            self.saved_metadata = []
 
             logger.info("Publisher initialized successfully.")
 
@@ -73,9 +36,11 @@ class Publisher:
             raise
 
     def __del__(self):
-        if self.rabbitmq_client and self.rabbitmq_client.is_connected():
-            self.rabbitmq_client.stop()
-            logger.info("Disconnected from RabbitMQ MQTT Broker.")
+        """Destructor to clean up resources."""
+        print("saving best frames and metadata")
+        self.save_best_frames()
+        self.save_metadata()
+        print("Pipeline finished. Destroying resources...")
 
     def get_env_variables(self):
         try:
@@ -91,64 +56,131 @@ class Publisher:
             logger.error("Port value should be an integer.")
             raise Exception("Port value should be an integer.")
 
+
     def process(self, frame):
-        """Publish frame and metadata to RabbitMQ MQTT Broker."""
         with frame.data() as image:
             video_info = frame.video_info()
             metadata = self.get_gva_metadata(frame.messages())
 
             if not metadata:
-                # No JSON message => no detections (because add-empty-results=false)
-                # Skip publishing but keep the pipeline flowing.
-                return True
+                return False  # Drop frames with no detections
 
-            metadata["frame_id"] = self.frame_id
-
-            # check
-            # print(f"Metadata: {metadata}")
-
-            # Include timestamp into metadata if required
+            # Add timestamp if enabled
             if os.getenv("ADD_TIMESTAMP_TO_METADATA", "").lower() == "true" and "time" not in metadata:
-                metadata["time"] = int(datetime.datetime.now(datetime.timezone.utc).timestamp()*1e9)
+                metadata["time"] = int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1e9)
+
+            objects = metadata.get("objects", [])
+            if not objects:
+                return False  # Drop frames with no objects
+
+            img_format = video_info.to_caps().get_structure(0).get_value('format')
+
+            for obj in objects:
+                obj_id = obj.get("id")
+                if obj_id is None:
+                    continue
+
+                obj_label = obj.get("detection", {}).get("label", "")
+
+                if self.interested:
+                    if obj_label not in self.interested:
+                        print(f"Skipping object with label: {obj_label}")
+                        continue
+
+                confidence = obj.get("detection", {}).get("confidence", 0)
+                w = obj.get("w", 0)
+                h = obj.get("h", 0)
+                score = confidence * (w * h)
+
+                current_best = self.best_frames.get(obj_id)
+                if current_best is None or score > current_best["score"]:
+                    # Update best frame for this object
+                    self.best_frames[obj_id] = {
+                        "score": score,
+                        "metadata": {
+                            "object_id": obj_id,
+                            "width": w,
+                            "height": h,
+                            "confidence": confidence,
+                            "bbox": obj.get("detection", {}).get("bounding_box", {}),
+                            "label": obj.get("detection", {}).get("label", ""),
+                            "img_format": img_format
+                        },
+                        "image": image.copy()  # Store full frame
+                    }
+
+
+            return False  # Drop all frames; we only save at EOS
+
+
+    def save_best_frames(self):
+        print("Saving best frames to disk...")
+        output_dir = "/tmp/best_frames"
+        os.makedirs(output_dir, exist_ok=True)
+
+        for obj_id, data in self.best_frames.items():
+            meta = data["metadata"]
+            img = data["image"]
+            fmt = meta.get("img_format", "BGRx")
+
+            # Build filename
+            label = meta.get("label", "")
+            filename = f"frame_{self.frame_id}.jpg"
+
+            # Inject mapping field into metadata so that JSON can map to JPG frame
+            meta["frame_index"] = self.frame_id
+            meta["frame_filename"] = filename
+
+            # Save image using your helper
+            self.save_image(img, filename, meta)
+
+            # Append metadata to saved_metadata list
+            self.saved_metadata.append(meta)
 
             self.frame_id += 1
 
-            # Update metadata with image format
-            image_format = video_info.to_caps().get_structure(0).get_value('format')
-            metadata["img_format"]=image_format
+        logger.info(f"Saved {len(self.best_frames)} best frames to {output_dir}")
+        self.best_frames.clear()
 
-            # Populate image filename
-            image_filename = f"{self.video_identifier}_frame_{metadata['frame_id']}.{MinioClient.file_ext['frame']}"
+        return True  # Forward event downstream
 
-            # Populate metadata filename
-            metadata_filename = f"{self.video_identifier}_frame_{metadata['frame_id']}_metadata.{MinioClient.file_ext['metadata']}"
+    def save_image(self, image_data, image_filename, metadata):
+        # Ensure output directory exists
+        output_dir = "/tmp/best_frames"
+        os.makedirs(output_dir, exist_ok=True)
 
-            # Insert image_url into metadata after saving image to Minio
-            image_uri = f"/{self.bucket_name}/{image_filename}"
+        # Convert BGR/BGRx/BGRA to RGB if needed
+        if metadata.get("img_format") in ["BGR", "BGRx", "BGRA"]:
+            image_data = image_data[:, :, 2::-1]
 
-            # Save image and metadata to Minio
-            self.save_image(image, image_filename, metadata)
-            self.save_metadata(metadata_filename, metadata, image_uri)
+        # Create PIL image
+        image = Image.fromarray(image_data)
 
-            # Construct the message to be published
-            self.messages = {
-                "frame_id": self.frame_id,
-                "image_uri": image_uri,
-                "metadata": metadata
-            }
+        # Build full path
+        full_path = os.path.join(output_dir, image_filename)
 
-            # Publish the message to RabbitMQ MQTT Broker
-            message_payload = json.dumps(self.messages)
-            ok = self.rabbitmq_client.publish(self.topic, message_payload, qos=1)
-            # logger.info(f"Published frame {metadata['frame_id']} to topic '{self.topic}'.")
+        try:
+            # Save image as JPEG with quality 85
+            image.save(full_path, format="JPEG", quality=85)
+            logger.info(f"Image saved successfully at {full_path}")
+        except Exception as e:
+            logger.error(f"Failed to save image {full_path}: {e}")
 
-            if not ok:
-                logger.error("Publish failed or not confirmed")
-            else:
-                logger.info("Publish confirmed by broker (QoS1)")
+    def save_metadata(self):
+        metadata_output_path = "/tmp/best_frames_metadata.json"
+        print(f"Metadatato be saved: {self.saved_metadata}")
+        try:
+            # Write to JSON file
+            with open(metadata_output_path, "w") as f:
+                print("trying to save")
+                json.dump(self.saved_metadata, f, indent=4)
 
+                logger.info(f"Metadata saved successfully at {metadata_output_path}")
 
-        return True
+            self.saved_metadata.clear()
+
+        except Exception as e:
+            logger.error(f"Failed to save metadata: {e}")
 
     def get_gva_metadata(self, messages:list) -> dict:
         """Takes a list of frame meta messages, loads them as a JSON and
@@ -161,43 +193,3 @@ class Publisher:
             metadata.update(message_json)
 
         return metadata
-
-    def save_image(self, image_data, image_filename, metadata):
-        # Invert the BGR color space to RGB
-        if metadata.get("img_format") in ["BGR", "BGRx", "BGRA"]:
-            image_data = image_data[:, :, 2::-1]
-
-        image = Image.fromarray(image_data)
-
-        logger.info("Saving image")
-        image_buffer = BytesIO()
-        image.save(image_buffer, format="JPEG", quality=85)
-        MinioClient.save_object(
-            self.minio_client,
-            self.bucket_name,
-            object_name=image_filename,
-            data=image_buffer
-        )
-
-    def save_metadata(self, metadata_filename, metadata, image_uri):
-
-        annotated_metadata = {
-            "frame_id": self.frame_id,
-            "image_uri": image_uri,
-            "metadata": metadata
-        }
-
-        metadata_dump: str = json.dumps(annotated_metadata, indent=4)
-        metadata_dump_bytes = metadata_dump.encode()
-        length = len(metadata_dump_bytes)
-
-        logger.info("Saving metadata")
-        metadata_buffer = BytesIO(metadata_dump_bytes)
-
-        MinioClient.save_object(
-            self.minio_client,
-            self.bucket_name,
-            object_name=metadata_filename,
-            data=metadata_buffer,
-            length=length
-        )

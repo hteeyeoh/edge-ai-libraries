@@ -31,13 +31,29 @@ class MinioClient:
                     secure=False,
                 )
             return cls.client
+
         except S3Error as ex:
             raise ex
+
+    @staticmethod
+    def ensure_bucket_exists(client: Minio, bucket_name: str) -> None:
+        """ Ensure that the given bucket exists on minio server.
+        If not, create the bucket.
+        """
+        try:
+            if not client.bucket_exists(bucket_name):
+                client.make_bucket(bucket_name)
+
+        except S3Error as err:
+            raise Exception(f"Error ocurred during bucket creation: {err}")
 
     staticmethod
     def save_object(client: Minio, bucket_name: str, object_name: str, data: BytesIO, length: int = 0) -> None:
         """ Save the provided data as a resource on minio at the given bucket name.
         """
+
+        # Ensure the bucket exists
+        MinioClient.ensure_bucket_exists(client, bucket_name)
 
         if not length:
             length = data.tell()

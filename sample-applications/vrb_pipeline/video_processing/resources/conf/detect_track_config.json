@@ -25,6 +25,30 @@
                             "maximum": 800,
                             "default": 480
                         },
+                        "publish": {
+                            "element": {
+                                "name": "publish",
+                                "property": "kwarg",
+                                "format": "json"
+                            },
+                            "type": "object",
+                            "properties": {
+                                "minio_bucket": {
+                                    "type": "string"
+                                },
+                                "video_identifier": {
+                                    "type": "string"
+                                },
+                                "topic": {
+                                    "type": "string"
+                                }
+                            },
+                            "default": {
+                                "minio_bucket": "videotest",
+                                "video_identifier": "video_id_test",
+                                "topic": "topic/video_stream"
+                            }
+                        },
                         "tracking_type": {
                             "type": "string",
                             "enum": [
@@ -34,43 +58,9 @@
                             ],
                             "default": "zero-term"
                         },
-                        "publish": {
-                            "element": {
-                                "name": "publish",
-                                "property": "kwarg",
-                                "format": "json"
-                            },
-                            "type": "object",
-                            "properties": {
-                                "interested": {
-                                    "type": "array"
-                                }
-                            },
-                            "default": {
-                                "interested": []
-                            }
-                        },
                         "detection-properties": {
                             "element": {
                                 "name": "detection",
-                                "format": "element-properties"
-                            }
-                        }
-                    }
-                },
-                "auto_start": false
-            },
-            {
-                "name": "caption_generation",
-                "source": "gstreamer",
-                "queue_maxsize": 50,
-                "pipeline": "multifilesrc location=\"/tmp/best_frames/frame_%d.jpg\" start-index=1 stop-index=99 ! decodebin ! videoconvertscale ! video/x-raw,format=BGRx ! gvagenai name=captioning ! gvametapublish file-path=/tmp/captions.json ! fakesink",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "captioning-properties": {
-                            "element": {
-                                "name": "captioning",
                                 "format": "element-properties"
                             }
                         }

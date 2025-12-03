@@ -40,6 +40,7 @@ services:
       - ../ov_models/:/home/pipeline-server/models
       - ../resources/videos:/home/pipeline-server/resources/videos
       - ../resources/models/:/home/pipeline-server/resources/models
+      - ../resources/conf/:/home/pipeline-server/resources/conf
     group_add:
       # render group ID for ubuntu 20.04 host OS
       - "109"
@@ -53,59 +54,58 @@ services:
       - 'a 189:* rwm'
     devices:
       - "/dev:/dev"
-    depends_on:
-      - rabbitmq
-      - minio
+    # depends_on:
+    #   - rabbitmq
+    #   - minio
     networks:
       - app_network
+  # rabbitmq:
+  #   image: rabbitmq:3-management-alpine
+  #   ports:
+  #     - "${AMQP_HOST_PORT:-5672}:5672" # AMQP port
+  #     - "${RABBITMQ_UI_HOST_PORT:-15672}:15672" # Management UI
+  #     - "${MQTT_HOST_PORT:-1883}:1883" # MQTT (TCP) port
+  #   environment:
+  #     - no_proxy=$no_proxy
+  #     - http_proxy=$http_proxy
+  #     - https_proxy=$https_proxy
+  #     - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+  #     - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+  #   volumes:
+  #     - ../resources/conf/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+  #   command: >
+  #     sh -c "rabbitmq-plugins enable --offline rabbitmq_mqtt rabbitmq_web_mqtt &&
+  #            rabbitmq-server"
+  #   healthcheck:
+  #     test: rabbitmq-diagnostics -q ping
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 5
+  #     start_period: 10s
+  #   networks:
+  #     - app_network
 
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    ports:
-      - "${AMQP_HOST_PORT:-5672}:5672" # AMQP port
-      - "${RABBITMQ_UI_HOST_PORT:-15672}:15672" # Management UI
-      - "${MQTT_HOST_PORT:-1883}:1883" # MQTT (TCP) port
-    environment:
-      - no_proxy=$no_proxy
-      - http_proxy=$http_proxy
-      - https_proxy=$https_proxy
-      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
-    volumes:
-      - ../resources/conf/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
-    command: >
-      sh -c "rabbitmq-plugins enable --offline rabbitmq_mqtt rabbitmq_web_mqtt &&
-             rabbitmq-server"
-    healthcheck:
-      test: rabbitmq-diagnostics -q ping
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 10s
-    networks:
-      - app_network
-
-  minio:
-    image: minio/minio:RELEASE.2025-02-07T23-21-09Z
-    environment:
-      - no_proxy=$no_proxy
-      - http_proxy=$http_proxy
-      - https_proxy=$https_proxy
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
-    ports:
-      - "${MINIO_HOST_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_HOST_PORT:-9001}:9001"
-    volumes:
-      - minio_data:/data
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    command: server /data --console-address ":9001"
-    networks:
-      - app_network
+  # minio:
+  #   image: minio/minio:RELEASE.2025-02-07T23-21-09Z
+  #   environment:
+  #     - no_proxy=$no_proxy
+  #     - http_proxy=$http_proxy
+  #     - https_proxy=$https_proxy
+  #     - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+  #     - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+  #   ports:
+  #     - "${MINIO_HOST_PORT:-9000}:9000"
+  #     - "${MINIO_CONSOLE_HOST_PORT:-9001}:9001"
+  #   volumes:
+  #     - minio_data:/data
+  #   healthcheck:
+  #     test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #   command: server /data --console-address ":9001"
+  #   networks:
+  #     - app_network
 
 networks:
   app_network:
