@@ -1,2 +1,5 @@
+fastapi==0.120.2
+langchain-core>=0.3.80
+langchain-vdms>=0.2.0
 minio==7.2.16
 pillow==11.3.0

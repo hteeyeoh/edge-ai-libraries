@@ -17,13 +17,18 @@ services:
       - no_proxy=$no_proxy
       - http_proxy=$http_proxy
       - https_proxy=$https_proxy
-      - RABBITMQ_HOST=${RABBITMQ_SERVICE}
-      - RABBITMQ_PORT=1883
-      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
-      - MINIO_SERVER=${MINIO_SERVER}
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      # - RABBITMQ_HOST=${RABBITMQ_SERVICE}
+      # - RABBITMQ_PORT=1883
+      # - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      # - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+      # - MINIO_SERVER=${MINIO_SERVER}
+      # - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      # - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME}
+      - EMBEDDING_HOST=${EMBEDDING_HOST:-multimodal-embedding-serving}
+      - EMBEDDING_PORT=${EMBEDDING_PORT:-8000}
+      - VDMS_HOST=${VDMS_HOST:-vdms-vector-db}
+      - VDMS_PORT=${VDMS_PORT:-55555}
       - ADD_TIMESTAMP_TO_METADATA=false
       - RUN_MODE=EVA
       # Default Detection and Classification Device
@@ -54,58 +59,69 @@ services:
       - 'a 189:* rwm'
     devices:
       - "/dev:/dev"
-    # depends_on:
-    #   - rabbitmq
-    #   - minio
+    depends_on:
+      - multimodal-embedding-serving
+      - vdms-vector-db
     networks:
       - app_network
-  # rabbitmq:
-  #   image: rabbitmq:3-management-alpine
-  #   ports:
-  #     - "${AMQP_HOST_PORT:-5672}:5672" # AMQP port
-  #     - "${RABBITMQ_UI_HOST_PORT:-15672}:15672" # Management UI
-  #     - "${MQTT_HOST_PORT:-1883}:1883" # MQTT (TCP) port
-  #   environment:
-  #     - no_proxy=$no_proxy
-  #     - http_proxy=$http_proxy
-  #     - https_proxy=$https_proxy
-  #     - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
-  #     - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
-  #   volumes:
-  #     - ../resources/conf/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
-  #   command: >
-  #     sh -c "rabbitmq-plugins enable --offline rabbitmq_mqtt rabbitmq_web_mqtt &&
-  #            rabbitmq-server"
-  #   healthcheck:
-  #     test: rabbitmq-diagnostics -q ping
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 5
-  #     start_period: 10s
-  #   networks:
-  #     - app_network
+  multimodal-embedding-serving:
+    image: intel/multimodal-embedding-serving:latest
+    container_name: multimodal-embedding-serving
+    ports:
+      - '${EMBEDDING_SERVER_PORT:-9777}:8000'
+    ipc: host
+    environment:
+      no_proxy: ${no_proxy},localhost,video-publisher,vdms-vector-db,multimodal-embedding-serving
+      no_proxy_env: ${no_proxy},localhost,video-publisher,vdms-vector-db,multimodal-embedding-serving
+      http_proxy: ${http_proxy}
+      https_proxy: ${https_proxy}
+      EMBEDDING_MODEL_NAME: ${EMBEDDING_MODEL_NAME}
+      EMBEDDING_DEVICE: ${EMBEDDING_DEVICE}
+      EMBEDDING_USE_OV: ${EMBEDDING_USE_OV}
+      EMBEDDING_OV_MODELS_DIR: ${EMBEDDING_OV_MODELS_DIR:-/app/ov_models}
+      DEFAULT_START_OFFSET_SEC: ${DEFAULT_START_OFFSET_SEC:-0}
+      DEFAULT_CLIP_DURATION: ${DEFAULT_CLIP_DURATION:--1}
+      DEFAULT_NUM_FRAMES: ${DEFAULT_NUM_FRAMES:-64}
+      OV_PERFORMANCE_MODE: ${OV_PERFORMANCE_MODE:-THROUGHPUT}
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - ${USER_GROUP_ID:-1000}
+      - ${VIDEO_GROUP_ID:-44}
+      - ${RENDER_GROUP_ID:-1002}
+    restart: unless-stopped
+    healthcheck:
+      test: [ 'CMD-SHELL', 'curl -f http://localhost:8000/health || exit 1' ]
+      interval: 10s
+      timeout: 10s
+      retries: 40
+      start_period: 5s
+    networks:
+      - app_network
+    volumes:
+      - ov-models:/home/appuser/.cache/huggingface
+      # - data-prep:/tmp/dataprep
+      - ov-models:${EMBEDDING_OV_MODELS_DIR:-/app/ov_models}
 
-  # minio:
-  #   image: minio/minio:RELEASE.2025-02-07T23-21-09Z
-  #   environment:
-  #     - no_proxy=$no_proxy
-  #     - http_proxy=$http_proxy
-  #     - https_proxy=$https_proxy
-  #     - MINIO_ROOT_USER=${MINIO_ROOT_USER}
-  #     - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
-  #   ports:
-  #     - "${MINIO_HOST_PORT:-9000}:9000"
-  #     - "${MINIO_CONSOLE_HOST_PORT:-9001}:9001"
-  #   volumes:
-  #     - minio_data:/data
-  #   healthcheck:
-  #     test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
-  #   command: server /data --console-address ":9001"
-  #   networks:
-  #     - app_network
+  vdms-vector-db:
+    image: intellabs/vdms:v2.11.0
+    ipc: host
+    environment:
+      - no_proxy=${no_proxy},localhost,video-publisher,vdms-vector-db
+      - no_proxy_env=${no_proxy},localhost,video-publisher,vdms-vector-db
+      - http_proxy=${http_proxy}
+      - https_proxy=${https_proxy}
+      - OVERRIDE_db_root_path=/db
+      - OVERRIDE_images_path=/db/images
+      - OVERRIDE_descriptors_path=/db/descriptors
+      - OVERRIDE_blobs_path=/db/blobs
+      - OVERRIDE_pmgd_path=/db/graph
+    ports:
+      - '${VDMS_VDB_HOST_PORT}:55555'
+    volumes:
+      - vdms-db:/db
+    networks:
+      - app_network
 
 networks:
   app_network:
@@ -117,5 +133,7 @@ volumes:
     driver_opts:
       type: tmpfs
       device: tmpfs
-  minio_data:
+  ov-models:
+    driver: local
+  vdms-db:
     driver: local

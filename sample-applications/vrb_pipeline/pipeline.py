@@ -24,21 +24,13 @@ class DummyEmbedding(Embeddings):
 
 # Step 1: Call the embeddings API
 embedding_api_url = "http://localhost:9777/embeddings"
-text_content = """The image depicts an animated character sitting at a desk in what appears to be a high-tech or control room environment.
-        The character is wearing glasses and a lanyard with a badge, suggesting they might be an employee or technician.
-        They are using a computer keyboard and have a cup of coffee on the desk, indicating they are working or studying for an extended period.
-
-        In the background, there are multiple monitors displaying complex code or data, reinforcing the idea that the setting is related to technology or programming."""
+#text_contents = "A white box with a green surface is in the picture."
+text_contents = "A hand is holding a cardboard box."
 headers = {"Content-Type": "application/json"}
 payload = {
     "input": {
         "type": "text",
-        "text": text_content
-        #"text": """The image depicts an animated character sitting at a desk in what appears to be a high-tech or control room environment.
-        #The character is wearing glasses and a lanyard with a badge, suggesting they might be an employee or technician.
-        #They are using a computer keyboard and have a cup of coffee on the desk, indicating they are working or studying for an extended period.
-
-       # In the background, there are multiple monitors displaying complex code or data, reinforcing the idea that the setting is related to technology or programming."""
+        "text": text_contents
     },
     "model": "CLIP/clip-vit-b-32",
     "encoding_format": "float"
@@ -50,6 +42,7 @@ response = requests.post(embedding_api_url, headers=headers, json=payload)
 response.raise_for_status()
 embedding_data = response.json()
 embeddings = embedding_data.get("embedding")
+#print(f"embeddings: {embeddings}")
 
 
 # Step 1: Connect to VDMS
@@ -61,21 +54,30 @@ dummy_embedding = DummyEmbedding()
 vdms_store = VDMS(
     client=vdms_client,
     embedding=dummy_embedding,
-    collection_name="text_collection",
+    collection_name="caption_collection",
     engine="FaissFlat",
     distance_strategy="IP",
     embedding_dimensions=512
     )
 
 
-vdms_store.add_from(
-    texts=[text_content],
-    metadatas=[{"source": "clip-vit-b-32", "id": "doc001"}],
-    embeddings=[embeddings],
-    ids=[str(uuid.uuid4())]
-)
 
-print("Inserted text with external embedding into VDMS.")
+#metadatas = [
+#    {"source": "clip-vit-b-32", "id": "doc001"},
+#    {"source": "clip-vit-b-32", "id": "doc002"},
+#    {"source": "clip-vit-b-32", "id": "doc003"}
+#]
+
+#ids = [str(uuid.uuid4()) for _ in range(len(text_contents))]
+
+#vdms_store.add_from(
+#    texts=[text_contents],
+#    metadatas=metadatas,
+#    embeddings=[embeddings],
+#    ids=ids
+#)
+
+#print("Inserted text with external embedding into VDMS.")
 
 results = vdms_store.similarity_search_by_vector(embeddings, k=3)
 

@@ -64,7 +64,7 @@
                 "name": "caption_generation",
                 "source": "gstreamer",
                 "queue_maxsize": 50,
-                "pipeline": "multifilesrc location=\"/tmp/best_frames/frame_%d.jpg\" start-index=1 stop-index=99 ! decodebin ! videoconvertscale ! video/x-raw,format=BGRx ! gvagenai name=captioning ! gvametapublish file-path=/tmp/captions.json ! fakesink",
+                "pipeline": "multifilesrc location=\"/tmp/best_frames/frame_%d.jpg\" start-index=1 stop-index=99 ! decodebin ! videoconvertscale ! video/x-raw,format=BGRx ! gvagenai name=captioning ! gvapython class=EmbeddingsPublisher function=process module=/home/pipeline-server/gvapython/publisher/embeddings.py name=embeddings ! gvametapublish file-path=/tmp/captions.json file-format=json ! fakesink",
                 "parameters": {
                     "type": "object",
                     "properties": {

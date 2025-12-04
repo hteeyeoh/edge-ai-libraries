@@ -20,7 +20,6 @@ class Publisher:
 
             self.get_env_variables()
             self.interested: list = kwargs.get("interested")
-            print(self.interested)
 
             # Initialize messages dictionary
             self.messages = {}
@@ -44,13 +43,7 @@ class Publisher:
 
     def get_env_variables(self):
         try:
-            self.mqtt_host: str = os.getenv("RABBITMQ_HOST", "localhost")
-            self.mqtt_port: int = int(os.getenv("RABBITMQ_PORT", "1883"))
-            self.mqtt_username: str = os.getenv("RABBITMQ_DEFAULT_USER")
-            self.mqtt_passwd: str = os.getenv("RABBITMQ_DEFAULT_PASS")
-            self.minio_server: str = os.getenv("MINIO_SERVER", "localhost:9000")
-            self.minio_username: str = os.getenv("MINIO_ROOT_USER")
-            self.minio_passwd: str = os.getenv("MINIO_ROOT_PASSWORD")
+            print("Getting environment variables for Publisher...")
 
         except ValueError:
             logger.error("Port value should be an integer.")
@@ -114,7 +107,6 @@ class Publisher:
 
 
     def save_best_frames(self):
-        print("Saving best frames to disk...")
         output_dir = "/tmp/best_frames"
         os.makedirs(output_dir, exist_ok=True)
 
@@ -167,12 +159,14 @@ class Publisher:
             logger.error(f"Failed to save image {full_path}: {e}")
 
     def save_metadata(self):
-        metadata_output_path = "/tmp/best_frames_metadata.json"
-        print(f"Metadatato be saved: {self.saved_metadata}")
+        metadata_output_path = "/tmp/frames_metadata.json"
+
+        if os.path.exists(metadata_output_path):
+            os.remove(metadata_output_path)
+
         try:
             # Write to JSON file
             with open(metadata_output_path, "w") as f:
-                print("trying to save")
                 json.dump(self.saved_metadata, f, indent=4)
 
                 logger.info(f"Metadata saved successfully at {metadata_output_path}")
