@@ -13,17 +13,13 @@ services:
     entrypoint: [ "./run.sh" ]
     ports:
       - "8090:8080"
+      - "${RTSP_PORT}:8554"
     environment:
-      - no_proxy=$no_proxy
+      - no_proxy=$no_proxy,${RTSP_CAMERA_IP}
       - http_proxy=$http_proxy
       - https_proxy=$https_proxy
-      # - RABBITMQ_HOST=${RABBITMQ_SERVICE}
-      # - RABBITMQ_PORT=1883
-      # - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
-      # - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
-      # - MINIO_SERVER=${MINIO_SERVER}
-      # - MINIO_ROOT_USER=${MINIO_ROOT_USER}
-      # - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - ENABLE_RTSP=${ENABLE_RTSP:-true}
+      - RTSP_PORT=${RTSP_PORT:-8554}
       - EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME}
       - EMBEDDING_HOST=${EMBEDDING_HOST:-multimodal-embedding-serving}
       - EMBEDDING_PORT=${EMBEDDING_PORT:-8000}

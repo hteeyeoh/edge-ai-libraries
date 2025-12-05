@@ -19,7 +19,7 @@ class Publisher:
             logger.info("Initializing Publisher via gvapython extension...")
 
             self.get_env_variables()
-            self.interested: list = kwargs.get("interested")
+            self.interested: list = kwargs.get("interested", None)
 
             # Initialize messages dictionary
             self.messages = {}
@@ -79,6 +79,8 @@ class Publisher:
                     if obj_label not in self.interested:
                         print(f"Skipping object with label: {obj_label}")
                         continue
+                else:
+                    print(f"No interested labels specified, processing all objects.")
 
                 confidence = obj.get("detection", {}).get("confidence", 0)
                 w = obj.get("w", 0)

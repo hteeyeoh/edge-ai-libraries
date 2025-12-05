@@ -25,7 +25,7 @@ class DummyEmbedding(Embeddings):
 # Step 1: Call the embeddings API
 embedding_api_url = "http://localhost:9777/embeddings"
 #text_contents = "A white box with a green surface is in the picture."
-text_contents = "A hand is holding a cardboard box."
+text_contents = "What the persons wearing?"
 headers = {"Content-Type": "application/json"}
 payload = {
     "input": {

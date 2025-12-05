@@ -9,6 +9,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY ../src /home/pipeline-server/gvapython/publisher/
 COPY ../resources/conf/config.json /home/pipeline-server/config.json
 
+ENV XDG_RUNTIME_DIR=/tmp/.xdg_runtime_dir
+
 # Optionally download copyleft sources if requested
 ARG tmp/copyleft_sources=false
 RUN if [ "$tmp/copyleft_sources" = "true" ]; then \
