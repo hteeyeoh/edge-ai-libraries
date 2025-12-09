@@ -1,0 +1,83 @@
+{
+    "config": {
+        "logging": {
+            "C_LOG_LEVEL": "INFO",
+            "PY_LOG_LEVEL": "INFO"
+        },
+        "pipelines": [
+            {
+                "name": "object_detection",
+                "source": "gstreamer",
+                "queue_maxsize": 50,
+                "pipeline": "{auto_source} ! decodebin ! videorate ! videoconvertscale ! video/x-raw,framerate={parameters[frame]}/10,format=BGRx,width=[1,{parameters[frame_width]}],pixel-aspect-ratio=1/1 ! gvadetect name=detection pre-process-backend=ie ! gvatrack tracking-type={parameters[tracking_type]} ! gvametaconvert format=json json-indent=0 add-empty-results=false ! queue ! gvapython class=Publisher function=process module=/home/pipeline-server/gvapython/publisher/publish.py name=publish ! fakesink",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "frame": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 64,
+                            "default": 2
+                        },
+                        "frame_width": {
+                            "type": "integer",
+                            "minimum": 160,
+                            "maximum": 800,
+                            "default": 480
+                        },
+                        "tracking_type": {
+                            "type": "string",
+                            "enum": [
+                                "zero-term",
+                                "zero-term-imageless",
+                                "short-term-imageless"
+                            ],
+                            "default": "zero-term"
+                        },
+                        "publish": {
+                            "element": {
+                                "name": "publish",
+                                "property": "kwarg",
+                                "format": "json"
+                            },
+                            "type": "object",
+                            "properties": {
+                                "interested": {
+                                    "type": "array"
+                                }
+                            },
+                            "default": {
+                                "interested": []
+                            }
+                        },
+                        "detection-properties": {
+                            "element": {
+                                "name": "detection",
+                                "format": "element-properties"
+                            }
+                        }
+                    }
+                },
+                "auto_start": false
+            },
+            {
+                "name": "caption_generation",
+                "source": "gstreamer",
+                "queue_maxsize": 50,
+                "pipeline": "multifilesrc location=\"/tmp/best_frames/frame_%d.jpg\" start-index=1 stop-index=99 ! decodebin ! videoconvertscale ! video/x-raw,format=BGRx ! gvagenai name=captioning ! gvapython class=EmbeddingsPublisher function=process module=/home/pipeline-server/gvapython/publisher/embeddings.py name=embeddings ! gvametapublish file-path=/tmp/captions.json file-format=json ! fakesink",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "captioning-properties": {
+                            "element": {
+                                "name": "captioning",
+                                "format": "element-properties"
+                            }
+                        }
+                    }
+                },
+                "auto_start": false
+            }
+        ]
+    }
+}

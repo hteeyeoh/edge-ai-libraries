@@ -1,0 +1,13 @@
+{
+    "config": {
+        "pipelines": [
+            {
+                "name": "pallet_defect_detection",
+                "source": "gstreamer",
+                "queue_maxsize": 50,
+                "pipeline": "{auto_source} name=source  ! decodebin ! videorate ! videoconvert ! video/x-raw,framerate=1/10,format=BGRA ! gvagenai device=CPU model-path=\"/home/pipeline-server/models/MiniCPM-V-4_5-ov/\" prompt=\"What's in this video?\" generation-config=\"max_new_tokens=100\" frame-rate=1 chunk-size=2 metrics=true ! gvametapublish file-path=/tmp/output.json ! fakesink",
+                "auto_start": false
+            }
+        ]
+    }
+}
