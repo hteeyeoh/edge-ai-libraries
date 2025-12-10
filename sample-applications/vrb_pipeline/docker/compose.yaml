@@ -41,7 +41,7 @@ services:
       - ../ov_models/:/home/pipeline-server/models
       - ../resources/videos:/home/pipeline-server/resources/videos
       - ../resources/models/:/home/pipeline-server/resources/models
-      # - ../configs/default.json:/home/pipeline-server/config.json
+      # - ../configs/gvadetect_gvagenai.json:/home/pipeline-server/config.json
     group_add:
       # render group ID for ubuntu 20.04 host OS
       - "109"

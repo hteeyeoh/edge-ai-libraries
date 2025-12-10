@@ -65,9 +65,6 @@ class FrameSelector:
 
     def process(self, frame):
 
-        print("Processing frame in FrameSelector...")
-
-        selected_this_frame = False
         current_visible_ids = set()
 
         with frame.data() as np_frame:
@@ -77,11 +74,6 @@ class FrameSelector:
             fmt = video_info.to_caps().get_structure(0).get_value('format')
 
             objects = metadata.get("objects", [])
-
-            if not objects:
-                # no object detectedm skip processing and drop frame
-                print("no objects detected, dropping frame")
-                return False
 
             for obj in objects:
                 obj_id = obj.get("id")
@@ -120,16 +112,9 @@ class FrameSelector:
 
             for obj_id in disappeared:
                 print(f"Object ID {obj_id} disappeared, saving best frame...")
-                best = self.best_frames.get(obj_id)
-                np_frame[:] = best["image"]
-
-
-                selected_this_frame = True
-
                 self._save_best_and_cleanup(obj_id)
 
-        print(f"selected_this_frame: {selected_this_frame}")
-        return selected_this_frame  # Forward frame downstream
+        return False  # Do not forward frame downstream
 
     def _save_best_and_cleanup(self, object_id):
         print(f"Saving best frame for object ID {object_id}...")
@@ -188,6 +173,8 @@ class FrameSelector:
 
         logger.info(f"Saved {len(self.best_frames)} best frames to {output_dir}")
         self.best_frames.clear()
+
+        return True  # Forward event downstream
 
     def save_image(self, image_data, image_filename, metadata):
         # Ensure output directory exists

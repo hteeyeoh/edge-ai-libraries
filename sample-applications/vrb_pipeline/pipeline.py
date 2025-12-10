@@ -56,7 +56,7 @@ dummy_embedding = DummyEmbedding()
 vdms_store = VDMS(
     client=vdms_client,
     embedding=dummy_embedding,
-    collection_name="caption_collection",
+    collection_name="captions_collection",
     engine="FaissFlat",
     distance_strategy="IP",
     embedding_dimensions=512
@@ -64,6 +64,7 @@ vdms_store = VDMS(
 
 
 results = vdms_store.similarity_search_by_vector(embeddings, k=3)
+print(results)
 
 
 print("\nSearch Results:")
