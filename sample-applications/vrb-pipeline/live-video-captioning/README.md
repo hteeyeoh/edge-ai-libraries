@@ -1,0 +1,50 @@
+## Live Video Captioning - Getting Started
+
+GenAI-powered captioning for live video streams. Deploy the stack locally to ingest RTSP, generate captions, and view results in the dashboard.
+
+### Prerequisites
+- Docker and Docker Compose installed (non-root Docker recommended)
+- Host with sufficient CPU/GPU for your chosen OpenVINO model
+- OpenVINO-compatible VLM model in `ov_models` (default `config.json` points to InternVL2)
+
+### Quick Start
+1) Configure environment: create `.env` in the repo root
+```
+PROJECT_NAME=vlm-captioning
+EVAM_HOST_PORT=8040
+EVAM_PORT=8080
+WHIP_SERVER_PORT=8889
+DASHBOARD_PORT=4173
+WEBRTC_PEER_ID=stream
+HOST_IP=${HOST_IP}
+MTX_WEBRTCICESERVERS2_0_USERNAME=localuser
+MTX_WEBRTCICESERVERS2_0_PASSWORD=localpass
+```
+
+2) Start services
+```
+docker compose --env-file .env up --build
+```
+Exposed host ports: 8040 (REST pipelines), 8889 (WHIP/WebRTC signaling), 4173 (dashboard)
+
+3) Provide a video source
+- Use a reachable RTSP stream (camera RTSP URL or local test feed)
+
+4) Create the pipeline
+- Submit a pipeline request via the web portal
+
+5) View results
+- Dashboard: http://localhost:4173 (uses `WEBRTC_PEER_ID=stream`, `SIGNALING_URL=http://localhost:8889`)
+- Metadata: `/tmp/results.jsonl` on the host
+
+6) Stop services
+```
+docker compose --env-file .env down
+```
+
+### TODOs
+- [ ] Add support for GPU pipeline in DLSPS
+- [ ] Add support for GPU graphs using Qmassa
+- [ ] Add support for multiple parallel pipeline triggers
+- [ ] Test on additional hardware targets
+- [ ] Update the DLSPS config to take all required values as parameters
