@@ -1,0 +1,5 @@
+fastapi==0.120.2
+langchain-core>=0.3.80
+langchain-vdms>=0.2.0
+pillow==11.3.0
+numpy==2.3.5

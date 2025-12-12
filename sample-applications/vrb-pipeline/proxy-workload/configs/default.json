@@ -1,0 +1,24 @@
+{
+    "config": {
+        "pipelines": [
+            {
+                "name": "genai_pipeline",
+                "source": "gstreamer",
+                "queue_maxsize": 50,
+                "pipeline": "{auto_source} name=source  ! decodebin ! videorate ! videoconvert ! video/x-raw,framerate=2/1,format=BGRA ! gvagenai frame-rate=2 chunk-size=1 name=captioning ! gvametapublish file-path=/tmp/output.json ! fakesink",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "captioning-properties": {
+                            "element": {
+                                "name": "captioning",
+                                "format": "element-properties"
+                            }
+                        }
+                    }
+                },
+                "auto_start": false
+            }
+        ]
+    }
+}
