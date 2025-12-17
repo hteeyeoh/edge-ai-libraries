@@ -27,6 +27,7 @@ class FrameSelector:
 
             self.output_dir = "/tmp/best_frames"
             self.frame_id = 1
+            self.skip_n_frames = 30
             self._lock = Lock()
             os.makedirs(self.output_dir, exist_ok=True)
 
@@ -70,10 +71,9 @@ class FrameSelector:
         selected_this_frame = False
         current_visible_ids = set()
 
-
-        self.frame_count += 1
-        if self.frame_count <= 20:
-            return
+        # self.frame_count += 1
+        # if self.frame_count <= self.skip_n_frames:
+        #     return
 
 
         with frame.data() as np_frame:
@@ -83,7 +83,7 @@ class FrameSelector:
             fmt = video_info.to_caps().get_structure(0).get_value('format')
 
             objects = metadata.get("objects", [])
-            print(f"Detected {len(objects)} objects in frame.")
+            # print(f"Detected {len(objects)} objects in frame.")
 
             if not objects:
                 # no object detectedm skip processing and drop frame
@@ -93,12 +93,12 @@ class FrameSelector:
             for obj in objects:
                 obj_id = obj.get("id")
                 obj_label = obj.get("detection", {}).get("label", "")
-                # print(f"Processing object ID: {obj_id} with label: {obj_label}")
+                print(f"Processing object ID: {obj_id} with label: {obj_label}")
 
-                if self.interested:
-                    if obj_label not in self.interested:
-                        # print(f"Skipping object ID {obj_id} as label {obj_label} is not in interested list.")
-                        continue
+                # if self.interested:
+                #     if obj_label not in self.interested:
+                #         # print(f"Skipping object ID {obj_id} as label {obj_label} is not in interested list.")
+                #         continue
 
                 current_visible_ids.add(obj_id)
 

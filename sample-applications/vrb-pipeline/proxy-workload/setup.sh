@@ -60,7 +60,7 @@ export VDMS_VDB_HOST_PORT=55555
 export VDMS_VDB_HOST=vdms-vector-db
 
 # include service in no_proxy
-export no_proxy="${no_proxy},${host_ip},vdms-vector-db,multimodal-embedding-serving,video-publisher"
+export no_proxy="${no_proxy},${host_ip},vdms-vector-db,multimodal-embedding-serving,video-publisher,mediamtx,coturn,video-ingestion,lvc-dashboard"
 
 echo "All required environment variables set successfully."
 echo "EMBEDDING_MODEL_NAME set to: ${EMBEDDING_MODEL_NAME}"
@@ -70,5 +70,6 @@ echo "OV_PERFORMANCE_MODE set to: ${OV_PERFORMANCE_MODE}"
 
 
 # RTSP
+export RTSP_CAMERA_IP=10.223.24.242
 export RTSP_PORT=8554
 export ENABLE_RTSP=true
