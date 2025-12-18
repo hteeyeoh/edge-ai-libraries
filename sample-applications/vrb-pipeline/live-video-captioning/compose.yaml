@@ -3,12 +3,12 @@ services:
   video-ingestion:
     image: intel/dlstreamer-pipeline-server:latest
     hostname: video-ingestion
-    read_only: true
+    read_only: false
     security_opt:
-    - no-new-privileges
-    privileged: false
+      - no-new-privileges
+    privileged: true
     tty: true
-    entrypoint: ["./run.sh"]
+    entrypoint: [ "./run.sh" ]
     depends_on:
       - mediamtx
     ports:
@@ -41,6 +41,7 @@ services:
       - "/dev:/dev"
       - "/tmp:/tmp"
       - ./ov_models:/home/pipeline-server/models
+      - ./ov_detection_models:/home/pipeline-server/models/detection_models
       - ./config.json:/home/pipeline-server/config.json:ro
       - ./resources:/home/pipeline-server/resources/videos:ro
     group_add:
@@ -48,18 +49,20 @@ services:
       - "109"
       # render group ID for ubuntu 22.04 host OS
       - "110"
+      # render group ID for ubuntu 24.04 host OS
+      - "992"
     device_cgroup_rules:
-    # Default run - device-cgroup-rule='c 189:* rmw'
-    # Selective rules can be applied for deployment
-    - 'c 189:* rmw'
-    - 'c 209:* rmw'
-    - 'a 189:* rwm'
+      # Default run - device-cgroup-rule='c 189:* rmw'
+      # Selective rules can be applied for deployment
+      - 'c 189:* rmw'
+      - 'c 209:* rmw'
+      - 'a 189:* rwm'
     devices:
-    # Following devices under /dev filesystem will be needed based on usecase
-    # dri - GPU
-    # USB camera devices
-    # Selective mount can be done for deployment as mounting whole /dev is not recommended
-    - "/dev:/dev"
+      # Following devices under /dev filesystem will be needed based on usecase
+      # dri - GPU
+      # USB camera devices
+      # Selective mount can be done for deployment as mounting whole /dev is not recommended
+      - "/dev/dri:/dev/dri"
     networks:
       - app_network
 
@@ -74,7 +77,7 @@ services:
       - https_proxy=$https_proxy
       - HTTPS_PROXY=$https_proxy
       - MTX_LOGLEVEL=info
-      - MTX_RTSP=no
+      - MTX_HLS=no
       - MTX_RTMP=no
       - MTX_SRT=no
       - MTX_RTMP=no
@@ -105,7 +108,7 @@ services:
       - HTTPS_PROXY=$https_proxy
     ports:
       - "3478:3478/udp"
-    command: ["-v"]  # Verbose mode for logging
+    command: [ "-v" ] # Verbose mode for logging
     networks:
       - app_network
 
@@ -124,8 +127,14 @@ services:
       - METADATA_POLL_SECONDS=${METADATA_POLL_SECONDS:-1}
       - WEBRTC_PEER_ID=${WEBRTC_PEER_ID:-stream}
       - SIGNALING_URL=http://${HOST_IP:-localhost}:${WHIP_SERVER_PORT:-8889}
+      # GPU metrics - reads from host qmassa output at /tmp/qmassa-stats.json
+      - QMASSA_ENABLED=${QMASSA_ENABLED:-true}
+      - QMASSA_JSON_FILE=/tmp/qmassa-stats.json
+      - QMASSA_POLL_INTERVAL_MS=${QMASSA_POLL_INTERVAL_MS:-1000}
     volumes:
       - "/tmp:/tmp:ro"
+      - "./ov_models:/app/ov_models:ro"
+      - "./ov_detection_models:/app/ov_detection_models:ro"
     ports:
       - "${DASHBOARD_PORT:-4173}:4173"
     depends_on:
