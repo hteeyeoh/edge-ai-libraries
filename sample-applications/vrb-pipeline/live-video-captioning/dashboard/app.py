@@ -24,6 +24,9 @@ from aiohttp.client_exceptions import ClientConnectionResetError
 import aiohttp_cors
 import psutil
 
+import base64
+import mimetypes
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -855,6 +858,7 @@ async def start_run(request: web.Request) -> web.Response:
     run_id = uuid.uuid4().hex
     peer_id = f"stream-{run_id[:10]}"
     metadata_file = f"/tmp/results-{run_id[:10]}.jsonl"
+    save_path = f"/tmp/{run_id[:10]}-frames/"
 
     pipeline_name = (req.pipelineName or PIPELINE_NAME).strip() or PIPELINE_NAME
 
@@ -874,6 +878,8 @@ async def start_run(request: web.Request) -> web.Response:
             "captioner-prompt": (req.prompt or "").strip() or "Describe what you see in the image in one sentence.",
             "captioner_model_name": (req.modelName or "").strip() or "OpenGVLab/InternVL2-2B",
             "captioner_max_new_tokens": req.maxNewTokens,
+            "save-path": save_path,
+            "metadata-save-path": metadata_file,
         },
     }
 
@@ -1101,6 +1107,201 @@ async def all_runs_metadata_stream(request: web.Request) -> web.StreamResponse:
     return response
 
 
+# ============================================================================
+# Screenshot retrieving
+
+SCREENSHOT_POLL_INTERVAL = 2.0 # Poll every 2 seconds for new screenshots
+
+SCREENSHOT_POLL_INTERVAL = 2.0  # Poll every 2 seconds for new screenshots
+
+async def all_runs_screenshot_stream(request: web.Request) -> web.StreamResponse:
+    response = web.StreamResponse(
+        status=200,
+        reason="OK",
+        headers={
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            # Helps with Nginx or similar proxies to disable buffering for SSE:
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+    await response.prepare(request)
+
+    # Track last processed files per run to avoid duplicate sends
+    last_processed_files: dict[str, set[str]] = {}
+
+    async def write_or_exit(data) -> bool:
+        """Write SSE data or return False if connection is closed or write fails."""
+        # Quick guard: if transport is closing, skip
+        transport = getattr(response, "transport", None) or getattr(request, "transport", None)
+        if transport and transport.is_closing():
+            print("Transport is closing, exiting write_or_exit")
+            return False
+        try:
+            message = f"data: {json.dumps(data)}\n\n"
+            await response.write(message.encode("utf-8"))
+            return True
+        except (ConnectionResetError, RuntimeError, asyncio.CancelledError):
+            # connection closed / task cancelled
+            print("Connection closed during write, exiting write_or_exit")
+            return False
+        except Exception:
+            # any other write error -> treat as closed for SSE purposes
+            print("Error during write, exiting write_or_exit")
+            return False
+
+    try:
+        # Send initial connected event
+        if not await write_or_exit({"type": "connected"}):
+            return response
+
+        while True:
+            try:
+                # If the client disconnected, stop the loop
+                transport = getattr(response, "transport", None) or getattr(request, "transport", None)
+                if transport and transport.is_closing():
+                    break
+
+                # Get current runs snapshot
+                current_runs = dict(RUNS)
+
+                # Clean up tracking for removed runs
+                removed_runs = set(last_processed_files.keys()) - set(current_runs.keys())
+                for run_id in removed_runs:
+                    last_processed_files.pop(run_id, None)
+                    # Send a "removed" event so frontend knows to clean up
+                    if not await write_or_exit({"runId": run_id, "removed": True}):
+                        # Client disconnected -> stop
+                        break
+
+                # If disconnected during removed events, exit outer loop
+                if transport and transport.is_closing():
+                    break
+
+                # Check for new screenshots for all active runs
+                for run_id, info in current_runs.items():
+                    try:
+                        # Initialize tracking for new runs
+                        if run_id not in last_processed_files:
+                            last_processed_files[run_id] = set()
+
+                        # Check run's screenshot directory
+                        screenshot_dir = Path(f"/tmp/{run_id}-frames/")
+                        if not screenshot_dir.exists():
+                            continue
+
+                        # Get all image files in the directory
+                        image_extensions = {".jpg", ".jpeg"}
+                        image_files = [
+                            f for f in screenshot_dir.iterdir()
+                            if f.is_file() and f.suffix.lower() in image_extensions
+                        ]
+
+                        # Sort files by modification time (newest first)
+                        image_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+
+                        # Process new files
+                        for image_file in image_files[:2]:
+                            file_key = f"{image_file.name}_{image_file.stat().st_mtime}"
+                            if file_key not in last_processed_files[run_id]:
+                                last_processed_files[run_id].add(file_key)
+
+                                # Process the new screenshot
+                                screenshot_data = await _process_screenshot(image_file)
+                                if screenshot_data:
+                                    event = {"runId": run_id, "screenshot": screenshot_data}
+                                    if not await write_or_exit(event):
+                                        # Client disconnected -> stop outer loop
+                                        raise asyncio.CancelledError()
+
+                        # Limit tracking size to prevent memory growth (keep last 50 files per run)
+                        if len(last_processed_files[run_id]) > 50:
+                            # keep only the most recent 30 entries
+                            sorted_files = sorted(last_processed_files[run_id])
+                            last_processed_files[run_id] = set(sorted_files[-30:])
+
+                    except asyncio.CancelledError:
+                        # bubble up to stop the whole stream cleanly
+                        raise
+                    except Exception as e:
+                        # Skip this run if there's an error processing its screenshots
+                        print(f"Error processing screenshots for run {run_id}: {e}")
+                        # Continue with other runs
+
+                await asyncio.sleep(SCREENSHOT_POLL_INTERVAL)
+
+            except asyncio.CancelledError:
+                # Stream task cancelled (client disconnect or server shutdown)
+                break
+            except Exception as e:
+                print(f"Error in screenshot stream loop: {e}")
+                # Back off briefly, then continue the loop; if client is closed, next write will return False
+                await asyncio.sleep(1)
+    finally:
+        # Attempt to finish the response cleanly
+        try:
+            await response.write_eof()
+        except Exception:
+            pass
+
+    return response
+
+async def _process_screenshot(image_file: Path) -> dict | None:
+    """Process a screenshot image file and return its base64 data."""
+    try:
+        # Read image file
+        with open(image_file, "rb") as f:
+            image_data = f.read()
+
+        # Encode image to base64
+        image_base64 = base64.b64encode(image_data).decode("utf-8")
+
+        # Determine MIME type
+        mime_type, _ = mimetypes.guess_type(str(image_file.name))
+        if not mime_type:
+            mime_type = "image/jpeg"  # Default to JPEG
+
+        # Create data URL
+        image_url =  f"data:{mime_type};base64,{image_base64}"
+
+        # Try to read corresponding caption file
+        # caption_file = image_file.with_suffix('.txt')
+        caption = "Processing..."
+
+        # if caption_file.exists():
+        #     try:
+        #         with open(caption_file, 'r', encoding='utf-8') as f:
+        #             caption = f.read().strip()
+        #     except Exception:
+        #         caption = "Caption unavailable"
+
+        # Get file timestamp
+        timestamp = image_file.stat().st_mtime
+        formatted_timestamp = _format_timestamp(timestamp)
+
+        return {
+            "imageUrl": image_url,
+            "caption": caption,
+            "timestamp": formatted_timestamp,
+            "filename": image_file.name,
+            "filesize": len(image_data)
+        }
+
+
+    except Exception as e:
+        print(f"Error processing screenshot {image_file}: {e}")
+        return None
+
+
+def _format_timestamp(timestamp: float) -> str:
+    """Format timestamp for display."""
+    import datetime
+    dt = datetime.datetime.fromtimestamp(timestamp)
+    return dt.strftime("%H:%M:%S")
+
+
 async def system_stats(request: web.Request) -> web.StreamResponse:
     """
     ---
@@ -1313,6 +1514,7 @@ No rate limiting is applied.
 
         # Streaming (Metadata and Stats)
         web.get("/api/runs/metadata-stream", all_runs_metadata_stream, allow_head=False),
+        web.get("/api/runs/screenshot-stream", all_runs_screenshot_stream, allow_head=False),
         web.get("/api/system-stats", system_stats, allow_head=False),
 
         # Monitoring (JSON snapshot)

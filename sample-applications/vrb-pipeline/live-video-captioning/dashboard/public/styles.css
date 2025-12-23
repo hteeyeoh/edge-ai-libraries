@@ -584,3 +584,31 @@ iframe {
     width: 100%;
     max-width: 100%;
 }
+
+@keyframes loading {
+    0% {
+        background-position: 200% 0;
+    }
+
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+.screenshot-feed-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.screenshot-feed-content::-webkit-scrollbar-track {
+    background: var(--bg);
+    border-radius: 3px;
+}
+
+.screenshot-feed-content::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.screenshot-feed-content::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}

@@ -21,7 +21,7 @@
         detectionThresholdInput: document.getElementById('detectionThresholdInput'),
     };
 
-    const state = { selectedRunId: null, runs: new Map(), metadataSource: null, runUIs: new Map() };
+    const state = { selectedRunId: null, runs: new Map(), metadataSource: null, screenshotSource: null, runUIs: new Map() };
     const DEFAULT_MODEL = 'InternVL2-1B';
     const DEFAULT_DETECTION_MODEL = "yolov8l-worldv2";
     const DEFAULT_PIPELINE = 'GenAI Pipeline on CPU';
@@ -355,13 +355,6 @@
         video.style.flex = '1';
         video.style.minHeight = '0';
 
-        const captionPanel = document.createElement('div');
-        captionPanel.className = 'caption-panel';
-        captionPanel.style.padding = '0';
-        captionPanel.style.flexShrink = '0';
-        captionPanel.style.maxHeight = '100px';
-        captionPanel.style.overflow = 'hidden';
-
         const chips = document.createElement('div');
         chips.className = 'chips';
         chips.style.marginTop = '0';
@@ -398,6 +391,81 @@
         caption.className = 'caption-text';
         caption.textContent = 'Waiting for metadata...';
 
+        // Frames rendering and caption panel
+        // Screenshot feed container
+        const screenshotFeed = document.createElement('div');
+        screenshotFeed.className = 'screenshot-feed';
+        screenshotFeed.style.height = '150px'; // Fixed height for the feed
+        screenshotFeed.style.display = 'flex';
+        screenshotFeed.style.flexDirection = 'column';
+        screenshotFeed.style.background = 'var(--panel-strong)';
+        screenshotFeed.style.borderRadius = '6px';
+        screenshotFeed.style.overflow = 'hidden';
+        screenshotFeed.style.border = '1px solid var(--border-color)';
+
+        // Feed header
+        const feedHeader = document.createElement('div');
+        feedHeader.style.padding = '6px 12px';
+        feedHeader.style.background = 'var(--bg-secondary)';
+        feedHeader.style.borderBottom = '1px solid var(--border-color)';
+        feedHeader.style.fontSize = '0.8rem';
+        feedHeader.style.fontWeight = 'bold';
+        feedHeader.style.color = 'var(--text-secondary)';
+        feedHeader.style.flexShrink = '0';
+        feedHeader.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21,15 16,10 5,21"/>
+                </svg>
+                Recent Frames & Captions
+            </div>
+        `;
+
+        // Scrollable content area
+        const feedContent = document.createElement('div');
+        feedContent.className = 'screenshot-feed-content';
+        feedContent.style.flex = '1';
+        feedContent.style.overflowY = 'auto';
+        feedContent.style.overflowX = 'hidden';
+        feedContent.style.padding = '6px';
+        feedContent.style.display = 'flex';
+        feedContent.style.flexDirection = 'column';
+        feedContent.style.gap = '6px';
+
+        // Empty state
+        const emptyState = document.createElement('div');
+        emptyState.className = 'feed-empty-state';
+        emptyState.style.textAlign = 'center';
+        emptyState.style.color = 'var(--text-muted)';
+        emptyState.style.fontSize = '0.75rem';
+        emptyState.style.padding = '16px 8px';
+        emptyState.style.display = 'flex';
+        emptyState.style.flexDirection = 'column';
+        emptyState.style.alignItems = 'center';
+        emptyState.style.justifyContent = 'center';
+        emptyState.style.height = '100%';
+        emptyState.innerHTML = `
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom: 6px; opacity: 0.4;">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21,15 16,10 5,21"/>
+            </svg>
+            <div>Waiting for frames...</div>
+        `;
+        feedContent.appendChild(emptyState);
+
+        screenshotFeed.appendChild(feedHeader);
+        screenshotFeed.appendChild(feedContent);
+
+        const captionPanel = document.createElement('div');
+        captionPanel.className = 'caption-panel';
+        captionPanel.style.padding = '0';
+        captionPanel.style.flexShrink = '0';
+        captionPanel.style.maxHeight = '100px';
+        captionPanel.style.overflow = 'hidden';
+
         const stopBtn = document.createElement('button');
         stopBtn.className = 'btn btn-danger';
         stopBtn.type = 'button';
@@ -429,11 +497,172 @@
 
         grid.appendChild(video);
         grid.appendChild(captionPanel);
+        grid.appendChild(screenshotFeed);
 
         wrap.appendChild(header);
         wrap.appendChild(grid);
 
-        return { wrap, video, caption, watcher, timestamp, chips, stopBtn };
+        return { wrap, video, caption, watcher, timestamp, chips, stopBtn, screenshotFeed: feedContent, emptyState };
+    }
+
+    function showImageModal(imageUrl, caption, timestamp) {
+        // Create modal overlay
+        const modal = document.createElement('div');
+        modal.style.position = 'fixed';
+        modal.style.top = '0';
+        modal.style.left = '0';
+        modal.style.width = '100%';
+        modal.style.height = '100%';
+        modal.style.background = 'rgba(0, 0, 0, 0.8)';
+        modal.style.display = 'flex';
+        modal.style.alignItems = 'center';
+        modal.style.justifyContent = 'center';
+        modal.style.zIndex = '1000';
+        modal.style.cursor = 'pointer';
+
+        // Modal content
+        const content = document.createElement('div');
+        content.style.maxWidth = '90%';
+        content.style.maxHeight = '90%';
+        content.style.background = 'var(--panel-strong)';
+        content.style.borderRadius = '8px';
+        content.style.padding = '16px';
+        content.style.cursor = 'default';
+
+        const img = document.createElement('img');
+        img.src = imageUrl;
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '70vh';
+        img.style.objectFit = 'contain';
+        img.style.borderRadius = '4px';
+
+        const captionText = document.createElement('div');
+        captionText.style.marginTop = '12px';
+        captionText.style.fontSize = '0.9rem';
+        captionText.style.color = 'var(--text-color)';
+        captionText.textContent = caption;
+
+        const timeText = document.createElement('div');
+        timeText.style.marginTop = '8px';
+        timeText.style.fontSize = '0.8rem';
+        timeText.style.color = 'var(--text-muted)';
+        timeText.textContent = timestamp;
+
+        content.appendChild(img);
+        content.appendChild(captionText);
+        content.appendChild(timeText);
+        modal.appendChild(content);
+
+        // Close on click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                document.body.removeChild(modal);
+            }
+        });
+
+        // Close on Escape key
+        const handleEscape = (e) => {
+            if (e.key === 'Escape') {
+                document.body.removeChild(modal);
+                document.removeEventListener('keydown', handleEscape);
+            }
+        };
+        document.addEventListener('keydown', handleEscape);
+
+        document.body.appendChild(modal);
+    }
+
+    function addScreenshotFrame(feedContent, emptyState, imageUrl, captionText, timestamp) {
+        // Remove empty state if it exists
+        if (emptyState && emptyState.parentNode) {
+            emptyState.remove();
+        }
+
+        // Create frame container - horizontal layout for compact view
+        const frameItem = document.createElement('div');
+        frameItem.className = 'screenshot-frame-item';
+        frameItem.style.display = 'flex';
+        frameItem.style.gap = '8px';
+        frameItem.style.padding = '6px';
+        frameItem.style.background = 'var(--bg-secondary)';
+        frameItem.style.borderRadius = '4px';
+        frameItem.style.border = '1px solid var(--border-color)';
+        frameItem.style.transition = 'all 0.2s ease';
+        frameItem.style.cursor = 'pointer';
+        frameItem.style.alignItems = 'flex-start';
+
+        // Hover effect
+        frameItem.addEventListener('mouseenter', () => {
+            frameItem.style.background = 'var(--bg-hover)';
+            frameItem.style.borderColor = 'var(--primary-color)';
+        });
+        frameItem.addEventListener('mouseleave', () => {
+            frameItem.style.background = 'var(--bg-secondary)';
+            frameItem.style.borderColor = 'var(--border-color)';
+        });
+
+        // Screenshot image (left side)
+        const img = document.createElement('img');
+        img.src = imageUrl;
+        img.style.width = '60px';
+        img.style.height = '45px';
+        img.style.objectFit = 'cover';
+        img.style.borderRadius = '3px';
+        img.style.border = '1px solid var(--border-color)';
+        img.style.backgroundColor = 'var(--bg)';
+        img.style.flexShrink = '0';
+
+        // Content container (right side)
+        const contentDiv = document.createElement('div');
+        contentDiv.style.flex = '1';
+        contentDiv.style.display = 'flex';
+        contentDiv.style.flexDirection = 'column';
+        contentDiv.style.gap = '2px';
+        contentDiv.style.minWidth = '0'; // Allow text to wrap
+
+        // Timestamp
+        const timeHeader = document.createElement('div');
+        timeHeader.style.fontSize = '0.65rem';
+        timeHeader.style.color = 'var(--text-muted)';
+        timeHeader.style.fontWeight = '500';
+        timeHeader.textContent = timestamp || new Date().toLocaleTimeString();
+
+        // Caption text
+        const captionDiv = document.createElement('div');
+        captionDiv.className = 'frame-caption';
+        captionDiv.style.fontSize = '0.7rem';
+        captionDiv.style.lineHeight = '1.2';
+        captionDiv.style.color = 'var(--text-color)';
+        captionDiv.style.wordWrap = 'break-word';
+        captionDiv.style.overflow = 'hidden';
+        captionDiv.style.display = '-webkit-box';
+        captionDiv.style.webkitLineClamp = '2'; // Limit to 2 lines
+        captionDiv.style.webkitBoxOrient = 'vertical';
+        captionDiv.textContent = captionText || 'Processing...';
+
+        // Click to enlarge image
+        frameItem.addEventListener('click', () => {
+            showImageModal(imageUrl, captionText, timestamp);
+        });
+
+        // Assemble frame item
+        contentDiv.appendChild(timeHeader);
+        contentDiv.appendChild(captionDiv);
+        frameItem.appendChild(img);
+        frameItem.appendChild(contentDiv);
+
+        // Add to top of feed (newest first)
+        feedContent.insertBefore(frameItem, feedContent.firstChild);
+
+        // Auto-scroll to top to show newest frame
+        feedContent.scrollTop = 0;
+
+        // Limit to last 15 frames for compact view
+        while (feedContent.children.length > 15) {
+            feedContent.removeChild(feedContent.lastChild);
+        }
+
+        return frameItem;
     }
 
     function initMultiplexedMetadataStream() {
@@ -482,6 +711,66 @@
         };
     }
 
+    function initMultiplexedScreenshotStream() {
+        // Single SSE connection for all run screenshots to avoid browser connection limits
+        if (state.screenshotSource) {
+            return; // Already initialized
+        }
+
+        state.screenshotSource = new EventSource('/api/runs/screenshot-stream');
+
+        state.screenshotSource.onmessage = (event) => {
+            if (!event.data) return;
+
+            try {
+                const msg = JSON.parse(event.data);
+                const runId = msg.runId;
+
+                if (!runId) return;
+
+                // Handle run removal notification
+                if (msg.removed) {
+                    // Run was removed server-side, clean up if still present
+                    return;
+                }
+
+                // Get the UI elements for this run
+                const ui = state.runUIs.get(runId);
+                if (!ui) return; // No UI for this run yet
+
+                // Extract screenshot data
+                const screenshotData = msg.screenshot || msg.data; // support both, just in case
+                if (!screenshotData) {
+                    // optionally log once
+                    // console.debug('No screenshot data in message', msg);
+                    return;
+                }
+
+                const { imageUrl, caption, timestamp } = screenshotData;
+                if (!imageUrl) {
+                    console.warn('Screenshot missing imageUrl for run', runId, screenshotData);
+                    return;
+                }
+
+                addScreenshotFrame(
+                    ui.screenshotFeed,
+                    ui.emptyState,
+                    imageUrl,
+                    caption || 'No caption',
+                    timestamp || new Date().toLocaleTimeString()
+                );
+
+            } catch (_err) {
+                // Ignore parse errors
+            }
+        };
+
+        state.screenshotSource.onerror = () => {
+            // Connection lost, will auto-reconnect
+            console.warn('Screenshot stream connection lost, reconnecting...');
+        }
+    }
+
     function attachRunStreams(run, ui) {
         const base = resolveSignalingBase(cfg.signalingUrl);
         if (base) {
@@ -493,6 +782,9 @@
 
         // Initialize the multiplexed stream if not already done
         initMultiplexedMetadataStream();
+
+        // Initialize the multiplexed screenshot stream if not already done
+        initMultiplexedScreenshotStream();
 
         // Store run info without individual EventSource
         state.runs.set(run.runId, { ...run, ui });
