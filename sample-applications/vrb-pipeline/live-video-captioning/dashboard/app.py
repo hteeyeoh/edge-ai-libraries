@@ -104,6 +104,8 @@ class StartRunRequest:
             prompt=data.get("prompt", cls.prompt),
             modelName=data.get("modelName", cls.modelName),
             maxNewTokens=max_tokens,
+            detectionModelName=data.get("detectionModelName", cls.detectionModelName),
+            detectionThreshold=data.get("detectionThreshold", cls.detectionThreshold),
             pipelineName=data.get("pipelineName"),
         )
 
@@ -846,7 +848,6 @@ async def start_run(request: web.Request) -> web.Response:
     """
     try:
         data = await request.json()
-        print(f"start_run: Received request data: {json.dumps(data)}")
         req = StartRunRequest.from_dict(data)
     except json.JSONDecodeError:
         logger.error("start_run: Invalid JSON in request body")
