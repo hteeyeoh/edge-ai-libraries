@@ -45,6 +45,7 @@ METRIC_DESC= {
     "factual-consistency": "Determines logical relationships between two text pieces. Evaluates how texts relate to each other."
 }
 
+
 def show_metric_description(choice):
     """Function to display the description for the selected option."""
     return METRIC_DESC.get(choice, "No description available.")
@@ -77,8 +78,14 @@ def submit_file(file):
             df = pd.DataFrame(comparisons)
             df.insert(0, "No.", range(1, len(df) + 1))
 
-            summary_text = "\n".join([f"{k}: {v}" for k, v in summary.items()])
-            return df, summary_text
+            summary_text = (
+                "| Metric | Value |\n|---|---|\n" +
+                "\n".join([f"| {k} | {v} |" for k, v in summary.items()])
+            ) if isinstance(summary, dict) else str(summary)
+
+            title_header = "### Factual Consistency Summary"
+
+            return df, summary_text, title_header
 
         else:
             return f"Error: {response.status_code}: {response.text}"
@@ -138,13 +145,15 @@ def create_ui():
 
                 # Output display component
                 result_table = gr.Dataframe(label="Sentence Comparisons", interactive=False)
-                output_summary = gr.Textbox(label="Factual Consistency Summary", lines=12)
+
+                result_title = gr.Markdown()
+                output_summary = gr.Markdown()
 
                 # Set up button click event
                 submit_button.click(
                     fn=submit_file,
                     inputs=[file_input],
-                    outputs=[result_table, output_summary]
+                    outputs=[result_table, output_summary, result_title]
                 )
 
             with gr.TabItem("Metrics"):
