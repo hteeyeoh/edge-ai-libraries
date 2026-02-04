@@ -39,7 +39,7 @@ NO_PROXY_ENV = os.environ.get("no_proxy", "")  # Comma-separated domains for no-
 HTTP_PROXY = os.environ.get("http_proxy", "")
 HTTPS_PROXY = os.environ.get("https_proxy", "")
 
-vdms_client = VDMS_Client(host="10.223.22.126", port=55555)
+vdms_client = VDMS_Client(host="vdms-vector-db", port=55555)
 
 # The RUN_TEST flag is used to bypass the model download and conversion steps during pytest unit testing.
 # If RUN_TEST is set to "True", the model download and conversion steps are skipped.
@@ -89,7 +89,7 @@ def get_retriever():
 
     """
 
-    embedding_api_url = "http://10.223.22.126:9777/embeddings"
+    embedding_api_url = "http://multimodal-embedding-serving:8000/embeddings"
 
     embeddings = EmbeddingAPI(
         api_url=embedding_api_url,
