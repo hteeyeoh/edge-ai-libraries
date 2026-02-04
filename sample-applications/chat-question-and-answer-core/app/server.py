@@ -280,9 +280,19 @@ async def query_chat(request: ChatRequest):
 
     else:
 
+        #return StreamingResponse(
+        #    process_query(rag_chain, request.input), media_type="text/event-stream"
+        #)
+
         return StreamingResponse(
-            process_query(rag_chain, request.input), media_type="text/event-stream"
+            process_query(retriever, rag_chain, request.input),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+            },
         )
+
 
 
 if __name__ == "__main__":

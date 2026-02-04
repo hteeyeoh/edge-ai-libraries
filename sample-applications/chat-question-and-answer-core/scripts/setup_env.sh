@@ -124,5 +124,13 @@ export COMPOSE_PROFILES=$PROFILES
 export UI_HOST="chatqna-core-ui"
 export BACKEND_HOST=$BACKEND_HOST
 
+# VDMS embedding
+export EMBEDDING_OV_MODELS_DIR=/app/ov_models
+#export EMBEDDING_MODEL_NAME=CLIP/clip-vit-b-32
+export EMBEDDING_MODEL_NAME=QwenText/qwen3-embedding-0.6b
+export EMBEDDING_SERVER_PORT=9777
+export EMBEDDING_DEVICE=CPU
+export EMBEDDING_USE_OV=false
+
 # Generate nginx.conf file for docker compose
 source ./nginx_config/generate_nginx_conf.sh
