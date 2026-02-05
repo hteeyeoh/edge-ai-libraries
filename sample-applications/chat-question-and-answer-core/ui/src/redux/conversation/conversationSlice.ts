@@ -320,6 +320,7 @@ export const doConversation = (conversationRequest: ConversationRequest) => {
   handleConnectionError().catch(console.error);
 
   let result: string = '';
+  let frameArrayReceived: any[] = [];
   try {
     fetchEventSource(CHAT_QNA_URL, {
       method: 'POST',
@@ -346,7 +347,14 @@ export const doConversation = (conversationRequest: ConversationRequest) => {
       onmessage(msg) {
         if (msg?.data !== '[DONE]') {
           try {
-            if (msg.data) {
+            // Handle frame event with metadata
+            if (msg.event === 'frame') {
+              if (msg.data) {
+                frameArrayReceived = JSON.parse(msg.data);
+                console.log('Received frame data:', frameArrayReceived);
+              }
+            } else if (msg.data) {
+              // Regular streaming data
               result += msg.data;
               if (result) {
                 store.dispatch(setOnGoingResult(result));
@@ -374,6 +382,7 @@ export const doConversation = (conversationRequest: ConversationRequest) => {
             content: result,
             time: getCurrentTimeStamp(),
             conversationId,
+            frames: frameArrayReceived.length > 0 ? frameArrayReceived : undefined,
           }),
         );
       },

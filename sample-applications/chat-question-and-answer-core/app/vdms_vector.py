@@ -1,5 +1,6 @@
 from .config import config
 from .logger import logger
+import json
 
 import os
 import requests
@@ -154,5 +155,5 @@ async def process_vdms_query(chain=None, query: str = "", retriever=None):
         yield f"data: {chunk}\n\n"
 
     # Done marker
-    #yield "event: frame\n"
-    #yield f"data: {json.dumps(sources)}\n\n"
+    yield "event: frame\n"
+    yield f"data: {json.dumps(sources)}\n\n"
