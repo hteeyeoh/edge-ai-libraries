@@ -62,7 +62,6 @@ const FrameImages: FC<FrameImagesProps> = ({ frames }) => {
 
   return (
     <FrameContainer>
-      <FrameTitle>Retrieved Frames:</FrameTitle>
       {frames.map((frame, index) => {
         const { metadata, preview } = frame;
         // Directly use base64 data as image source
@@ -72,13 +71,6 @@ const FrameImages: FC<FrameImagesProps> = ({ frames }) => {
           <FrameItem key={`frame-${metadata.frame_id}-${index}`}>
             <FrameImage src={imageUrl} alt={preview} />
             {preview && <FrameCaption>{preview}</FrameCaption>}
-            <FrameInfo>
-              <span>Frame ID: {metadata.frame_id}</span>
-              <span>
-                Dimensions: {metadata.frame_width} × {metadata.frame_height}
-              </span>
-              <span>Format: {metadata.frame_format}</span>
-            </FrameInfo>
           </FrameItem>
         );
       })}
