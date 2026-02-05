@@ -7,11 +7,25 @@ export enum MessageRole {
   System = 'system',
 }
 
+export interface FrameMetadata {
+  frame_data: string; // base64 encoded image
+  frame_format: string; // e.g., 'BGRA'
+  frame_height: number;
+  frame_width: number;
+  frame_id: number;
+}
+
+export interface FrameSource {
+  metadata: FrameMetadata;
+  preview: string; // text preview/caption
+}
+
 export interface Message {
   role: MessageRole;
   content: string;
   time: number;
   conversationId: string;
+  frames?: FrameSource[]; // optional frame data
 }
 
 export interface ConversationRequest {

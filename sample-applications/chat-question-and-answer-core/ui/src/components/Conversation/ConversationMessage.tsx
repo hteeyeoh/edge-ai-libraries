@@ -5,12 +5,15 @@ import type { FC } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { formatDistanceToNow } from 'date-fns';
 import { useTranslation } from 'react-i18next';
+import FrameImages from './FrameImages.tsx';
+import { FrameSource } from '../../redux/conversation/conversation.ts';
 
 interface ConversationMessageProps {
   message: string;
   human: boolean;
   date: number;
   isGenerating?: boolean;
+  frames?: FrameSource[];
 }
 
 const ConversationMessageContainer = styled.div<{ $human: boolean }>`
@@ -78,6 +81,7 @@ const ConversationMessage: FC<ConversationMessageProps> = ({
   message,
   date,
   isGenerating = false,
+  frames,
 }) => {
   const { t } = useTranslation();
 
@@ -94,6 +98,7 @@ const ConversationMessage: FC<ConversationMessageProps> = ({
           {message}
           {isGenerating && <Circle data-testid='circle' />}
         </StyledMessage>
+        {frames && frames.length > 0 && <FrameImages frames={frames} />}
       </MessageWrapper>
     </ConversationMessageContainer>
   );

@@ -128,6 +128,7 @@ const Conversation: FC = () => {
               date={message.time * 1000}
               human={message.role === MessageRole.User}
               message={message.content}
+              frames={message.frames}
             />
           ))}
           {isGenerating && (
