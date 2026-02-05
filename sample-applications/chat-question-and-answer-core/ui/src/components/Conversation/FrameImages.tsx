@@ -10,11 +10,15 @@ interface FrameImagesProps {
 }
 
 const FrameContainer = styled.div`
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 1rem;
   margin-top: 1rem;
   width: 100%;
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
 `;
 
 const FrameItem = styled.div`
@@ -39,20 +43,6 @@ const FrameCaption = styled.p`
   color: var(--color-text-secondary, #666);
   margin: 0;
   font-style: italic;
-`;
-
-const FrameInfo = styled.div`
-  font-size: 0.75rem;
-  color: var(--color-text-tertiary, #999);
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-`;
-
-const FrameTitle = styled.h4`
-  margin: 0 0 0.5rem 0;
-  font-size: 0.9rem;
-  color: var(--color-text-primary, #333);
 `;
 
 const FrameImages: FC<FrameImagesProps> = ({ frames }) => {
