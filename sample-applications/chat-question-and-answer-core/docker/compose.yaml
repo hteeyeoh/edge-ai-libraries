@@ -16,6 +16,12 @@ x-chatqna-core-common: &chatqna-core-common
     https_proxy: ${https_proxy}
     no_proxy: ${no_proxy}
     HF_ACCESS_TOKEN: ${HF_ACCESS_TOKEN}
+    USE_VDMS: ${USE_VDMS:-false}
+    VDMS_HOST: ${VDMS_HOST:-vdms-vector-db}
+    VDMS_PORT: ${VDMS_PORT:-5555}
+    VDMS_EMBEDDING_MODEL: ${VDMS_EMBEDDING_MODEL:-}
+    VDMS_EMBEDDING_HOST: ${VDMS_EMBEDDING_HOST:-multimodal-embedding-serving}
+    VDMS_EMBEDDING_HOST_PORT: ${VDMS_EMBEDDING_HOST_PORT:-8000}
   ports:
     - "8888:8888"
   volumes:

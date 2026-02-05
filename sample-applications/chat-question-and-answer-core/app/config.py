@@ -68,6 +68,16 @@ class Settings(BaseSettings):
     MAX_TOKENS: int = 1024
     KEEP_ALIVE: Union[str, int, None] = None
 
+    # VDMS
+    USE_VDMS: bool = False
+    VDMS_HOST: str = ""
+    VDMS_PORT: int = 5555
+    VDMS_EMBEDDING_MODEL: str = ""
+    VDMS_EMBEDDING_HOST: str = ""
+    VDMS_EMBEDDING_HOST_PORT: int = 8000
+
+
+
     # These fields will not be affected by environment variables
     _ENABLE_RERANK: bool = PrivateAttr(True)
     _SEARCH_METHOD: str = PrivateAttr("mmr")
@@ -77,7 +87,7 @@ class Settings(BaseSettings):
     _TMP_FILE_PATH: str = PrivateAttr("/tmp/chatqna/documents")
     _DEFAULT_MODEL_CONFIG: str = PrivateAttr("/tmp/model_config/default_model.yaml")
     _MODEL_CONFIG_PATH: str = PrivateAttr("/tmp/model_config/config.yaml")
-
+    _VDMS_EMBEDDING_LENGTH: int = PrivateAttr(0)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

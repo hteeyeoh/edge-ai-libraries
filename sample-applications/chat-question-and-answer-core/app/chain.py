@@ -1,12 +1,12 @@
 from .config import config
 from .document import load_file_document
 from .logger import logger
-from langchain.retrievers import ContextualCompressionRetriever
 from langchain_community.vectorstores import FAISS
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_classic.retrievers.contextual_compression import ContextualCompressionRetriever
 import os
 import importlib
 import pandas as pd

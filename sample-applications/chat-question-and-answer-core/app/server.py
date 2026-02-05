@@ -19,6 +19,7 @@ from .chain import (
     process_query
 )
 from .document import validate_document, save_document
+from .vdms_vector import get_vdms_retriever, process_vdms_query
 
 app = FastAPI(title="Chat Question and Answer Core", root_path="/v1/chatqna")
 
@@ -257,7 +258,7 @@ async def query_chat(request: ChatRequest):
         Union[str, StreamingResponse]: The response to the chat query. If streaming is enabled, returns a StreamingResponse object; otherwise, returns the response as a string.
 
     Raises:
-        HHTTPException: If the input question text is empty or not provided, a HTTPStatus.UNPROCESSABLE_ENTITY is returned.
+        HTTPException: If the input question text is empty or not provided, a HTTPStatus.UNPROCESSABLE_ENTITY is returned.
     """
 
     if not request.input or request.input == "":
@@ -267,8 +268,12 @@ async def query_chat(request: ChatRequest):
 
     st = time.perf_counter()
 
-    retriever = get_retriever()
-
+    if config.USE_VDMS:
+        print("Using VDMS backend for retrieval")
+        retriever = get_vdms_retriever()
+    else:
+        print("Using standard backend for retrieval")
+        retriever = get_retriever()
     rag_chain = build_chain(retriever)
 
     if request.stream == False:
@@ -279,10 +284,14 @@ async def query_chat(request: ChatRequest):
         return {"status": "Success", "metadata": response}
 
     else:
-
-        return StreamingResponse(
-            process_query(rag_chain, request.input), media_type="text/event-stream"
-        )
+        if config.USE_VDMS:
+            return StreamingResponse(
+                process_vdms_query(rag_chain, request.input, retriever), media_type="text/event-stream"
+            )
+        else:
+            return StreamingResponse(
+                process_query(rag_chain, request.input), media_type="text/event-stream"
+            )
 
 
 if __name__ == "__main__":

@@ -171,28 +171,34 @@ class OpenVINOBackend:
         self.login_to_huggingface(self.huggingface_token)
 
         # Download embedding, LLM, and reranker models from HuggingFace
-        self.download_huggingface_model(self.embedding_model_id, self.cache_dir)
-        self.download_huggingface_model(self.reranker_model_id, self.cache_dir)
+        if config.USE_VDMS is False:
+            self.download_huggingface_model(self.embedding_model_id, self.cache_dir)
+            self.download_huggingface_model(self.reranker_model_id, self.cache_dir)
         self.download_huggingface_model(self.llm_model_id, self.cache_dir)
 
         # Convert models
-        self.convert_model(self.embedding_model_id, self.cache_dir, "embedding")
-        self.convert_model(self.reranker_model_id, self.cache_dir, "reranker")
+        if config.USE_VDMS is False:
+            self.convert_model(self.embedding_model_id, self.cache_dir, "embedding")
+            self.convert_model(self.reranker_model_id, self.cache_dir, "reranker")
         self.convert_model(self.llm_model_id, self.cache_dir, "llm")
 
-        # Initialize embedding model
-        embedding = OpenVINOBgeEmbeddings(
-            model_name_or_path = os.path.join(self.cache_dir, self.embedding_model_id),
-            model_kwargs = {"device": self.embedding_device, "compile": False},
-        )
-        embedding.ov_model.compile()
+        if config.USE_VDMS is False:
+            # Initialize embedding model
+            embedding = OpenVINOBgeEmbeddings(
+                model_name_or_path = os.path.join(self.cache_dir, self.embedding_model_id),
+                model_kwargs = {"device": self.embedding_device, "compile": False},
+            )
+            embedding.ov_model.compile()
 
-        # Initialize reranker model
-        reranker = OpenVINOReranker(
-            model_name_or_path = os.path.join(self.cache_dir, self.reranker_model_id),
-            model_kwargs = {"device": self.reranker_device},
-            top_n = 2,
-        )
+            # Initialize reranker model
+            reranker = OpenVINOReranker(
+                model_name_or_path = os.path.join(self.cache_dir, self.reranker_model_id),
+                model_kwargs = {"device": self.reranker_device},
+                top_n = 2,
+            )
+        else:
+            embedding = None
+            reranker = None
 
         # Initialize LLM
         llm = HuggingFacePipeline.from_model_id(

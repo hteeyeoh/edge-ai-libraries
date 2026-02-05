@@ -4,10 +4,14 @@
 # It accepts two optional parameters:
 # -p or --path: Specify the model cache path (default is /tmp/model_cache/)
 # -d or --device: Specify the device (default is cpu)
+# -b or --backend: Specify the backend (default is openvino)
+# -v or --vector:  Specify the vector store (default is local; supported: local, vdm
+
 # Usage:
-# ./setup_env.sh
-# OR
-# ./setup_env.sh -p /path/to/model_cache -d gpu
+#   source script.sh
+#   source script.sh -p /path/to/model_cache -d gpu
+#   source script.sh -b ollama
+#   source script.sh -v vdms
 
 # GPUs currently tested:
 # - Arc A770 dGPU
@@ -20,6 +24,7 @@ DEVICE="CPU"
 PROFILES="OPENVINO"
 BACKEND="OPENVINO"
 BACKEND_HOST="chatqna-core-ov-cpu"
+VECTOR_STORE="local"
 
 print_help() {
     echo "Usage: source setup.sh [options]"
@@ -27,6 +32,7 @@ print_help() {
     echo "  -p, --path <path>       Specify the model cache path"
     echo "  -d, --device <device>   Specify the device"
     echo "  -b, --backend <backend> Specify the backend (openvino or ollama)"
+    echo "  -v, --vector <vector>   Specify the vector store (local or vdms)"
     echo "  -h, --help              Display this help message"
 }
 
@@ -39,6 +45,7 @@ while [[ "$#" -gt 0 ]]; do
         -p|--path) MODEL_CACHE_PATH="$2"; shift ;;
         -d|--device) DEVICE="$2"; shift ;;
         -b|--backend) BACKEND="$2"; shift ;;
+	-v|--vector) VECTOR_STORE="$2"; shift ;;
         -h|--help)
             print_help
             return 0
@@ -69,6 +76,15 @@ if [[ "$DEVICE" != "CPU" && "$DEVICE" != "GPU" ]]; then
     echo "Error: Invalid device value '$DEVICE'. Valid values are 'cpu' or 'gpu'."
     return 1
 fi
+
+
+# Normalize and validate VECTOR_STORE 
+VECTOR_STORE=$(echo "$VECTOR_STORE" | tr '[:upper:]' '[:lower:]')
+if [[ "$VECTOR_STORE" != "local" && "$VECTOR_STORE" != "vdms" ]]; then
+    echo "Error: Invalid vector store '$VECTOR_STORE'. Valid values are 'local' or 'vdms'."
+    return 1
+fi
+
 
 # Check if MODEL_CACHE_PATH is an absolute path
 if [[ "$MODEL_CACHE_PATH" != /* ]]; then
@@ -123,6 +139,21 @@ export APP_BACKEND_URL="/v1/chatqna"
 export COMPOSE_PROFILES=$PROFILES
 export UI_HOST="chatqna-core-ui"
 export BACKEND_HOST=$BACKEND_HOST
+
+
+if [ "$VECTOR_STORE" == "vdms" ]; then
+    echo "Connecting for VDMS vector."
+    export USE_VDMS=true
+    export VDMS_HOST="${VDMS_HOST}"
+    export VDMS_PORT="${VDMS_PORT}"
+    export VDMS_EMBEDDING_MODEL="${VDMS_EMBEDDING_MODEL}"
+    export VDMS_EMBEDDING_HOST="${VDMS_EMBEDDING_HOST}"
+    export VDMS_EMBEDDING_HOST_PORT="${VDMS_EMBEDDING_HOST_PORT}"
+else
+    echo "Local FAISS vectordb"
+    export USE_VDMS=false
+fi
+    
 
 # Generate nginx.conf file for docker compose
 source ./nginx_config/generate_nginx_conf.sh
