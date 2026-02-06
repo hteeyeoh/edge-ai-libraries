@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import gradio as gr
+import json
 import logging
 import requests
 import os
@@ -75,13 +76,62 @@ def submit_file(file):
                 summary = {}
                 comparisons = data
 
-            df = pd.DataFrame(comparisons)
-            df.insert(0, "No.", range(1, len(df) + 1))
+            # df = pd.DataFrame(comparisons)
+            # df.insert(0, "No.", range(1, len(df) + 1))
 
-            summary_text = (
-                "| Metric | Value |\n|---|---|\n" +
-                "\n".join([f"| {k} | {v} |" for k, v in summary.items()])
-            ) if isinstance(summary, dict) else str(summary)
+            # Build the table with a single JSON column for bert_score
+            if not comparisons:
+                df = pd.DataFrame()
+            else:
+                # Turn bert_score dict into a pretty-printed JSON string in one column
+                for row in comparisons:
+                    bs = row.get("bert_score")
+                    row["bert_score"] = (
+                        json.dumps(bs, indent=2, ensure_ascii=False)
+                        if isinstance(bs, dict) else str(bs)
+                    )
+
+                    rs = row.get("rouge_score")
+                    row["rouge_score"] = (
+                        json.dumps(rs, indent=2, ensure_ascii=False)
+                        if isinstance(rs, dict) else str(rs)
+                    )
+
+
+                # Create DataFrame and rename columns for display
+                df = pd.DataFrame(comparisons)
+                rename_map = {
+                    "reference_sentence": "Reference Sentence",
+                    "matched_sentence": "Matched Sentence",
+                    "similarity_score": "Cosine Similarity",
+                    "factual_consistency": "NLI Label",
+                    "bert_score": "BERT Score",
+                    "rouge_score": "ROUGE Score"
+                }
+                df = df.rename(columns=rename_map)
+
+                # Insert running number
+                df.insert(0, "No.", range(1, len(df) + 1))
+
+                # Round numeric similarity column
+                if "Cosine Similarity" in df.columns:
+                    df["Cosine Similarity"] = pd.to_numeric(
+                        df["Cosine Similarity"], errors="coerce"
+                    ).round(4)
+
+                # Optional: explicit column order if you like
+                desired_cols = [
+                    "No.", "Reference Sentence", "Matched Sentence",
+                    "NLI Label", "Cosine Similarity", "BERT Score", "ROUGE Score"
+                ]
+                df = df[[c for c in desired_cols if c in df.columns]]
+
+            # Build summary markdown table
+            if isinstance(summary, dict):
+                summary_rows = [f"| {k} | {v} |" for k, v in summary.items()]
+                summary_text = "| Metric | Value |\n|---|---|\n" + "\n".join(summary_rows)
+            else:
+                summary_text = str(summary)
 
             title_header = "### Factual Consistency Summary"
 

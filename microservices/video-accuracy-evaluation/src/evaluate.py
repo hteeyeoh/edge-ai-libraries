@@ -288,21 +288,45 @@ class Evaluator:
             best_match_idx = torch.argmax(cosine_scores).item()
             best_match_sentence = gen_sentences[best_match_idx]
 
-            result = self._evaluate_factual_consistency(best_match_sentence, ref_sentence)
-            label = result["factual_consistency"]
+            # Evaluate factual consistency using NLI model
+            factual_consistency_result = self._evaluate_factual_consistency(best_match_sentence, ref_sentence)
+            factual_consistency_label = factual_consistency_result["factual_consistency"]
+
+            # Evaluate bert score
+            bert_result = self._calculate_bert_score(best_match_sentence, ref_sentence)
+            bert_score_f1 = bert_result["f1_score"]
+            bert_score_precision = bert_result["precision"]
+            bert_score_recall = bert_result["recall"]
+
+            # Evaluate rouge score
+            rouge_result = self._calculate_rouge_score(best_match_sentence, ref_sentence)
+            rouge1_score = rouge_result["rouge1"]
+            rouge2_score = rouge_result["rouge2"]
+            rougel_score = rouge_result["rougeL"]
+
 
             results.append(
                 {
                     "reference_sentence": ref_sentence,
                     "matched_sentence":best_match_sentence,
                     "similarity_score": round(float(cosine_scores[best_match_idx].item()), 4),
-                    "factual_consistency": label
+                    "factual_consistency": factual_consistency_label,
+                    "bert_score": {
+                        "f1_score": bert_score_f1,
+                        "precision": bert_score_precision,
+                        "recall": bert_score_recall
+                    },
+                    "rouge_score": {
+                        "rouge1": rouge1_score,
+                        "rouge2": rouge2_score,
+                        "rougeL": rougel_score
+                    }
                 }
             )
 
-            if label == "entailment":
+            if factual_consistency_label == "entailment":
                 entailment_count += 1
-            elif label == "neutral":
+            elif factual_consistency_label == "neutral":
                 neutral_count += 1
             else:
                 contradiction_count += 1
