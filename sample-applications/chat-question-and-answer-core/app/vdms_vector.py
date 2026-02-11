@@ -109,11 +109,8 @@ def get_vdms_retriever():
     )
 
     retriever = vdms_store.as_retriever(
-        search_type="similarity_score_threshold",
-        search_kwargs={
-            "k": 3,
-            "score_threshold": 0.0 # >= score_threshold
-        },
+        search_type="similarity",
+        search_kwargs={"k": 1},
     )
 
     return retriever
