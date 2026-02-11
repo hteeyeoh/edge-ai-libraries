@@ -47,6 +47,14 @@ services:
       - chatqna-core-ov-gpu
       - chatqna-core-ui
 
+  nginx-npu:
+    <<: *nginx-common
+    profiles:
+      - OPENVINO-NPU
+    depends_on:
+      - chatqna-core-ov-npu
+      - chatqna-core-ui
+
   nginx-ollama:
     <<: *nginx-common
     profiles:
@@ -75,6 +83,22 @@ services:
       - /dev/dri:/dev/dri
     group_add:
       - ${RENDER_DEVICE_GID}
+      - ${USER_GROUP_ID-1000}
+
+  chatqna-core-ov-npu:
+    <<: *chatqna-core-common
+    profiles:
+      - OPENVINO-NPU
+    container_name: chatqna-core-ov-npu
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+      args:
+        USE_NPU: "true"
+    devices:
+      - /dev/accel:/dev/accel
+    group_add:
+      - ${NPU_DEVICE_GID}
       - ${USER_GROUP_ID-1000}
 
   chatqna-core-ollama:

@@ -15,6 +15,7 @@ from langchain_huggingface import HuggingFacePipeline
 import os
 import openvino as ov
 
+from .ov_langchain_helper import OpenVINOLLM
 
 class OpenVINOBackend:
     def __init__(self):
@@ -145,10 +146,13 @@ class OpenVINOBackend:
             )
 
         elif model_type == "llm":
+            weight_fmt = "int8"
+            if self.llm_device == "NPU":
+                weight_fmt = "int4"    # Suggested to use int4 for NPU device
             model = OVModelForCausalLM.from_pretrained(
                 model_id,
                 export=True,
-                weight_format="int8",
+                weight_format=weight_fmt,
                 trust_remote_code=True
             )
 
@@ -184,41 +188,97 @@ class OpenVINOBackend:
 
         if config.USE_VDMS is False:
             # Initialize embedding model
+            # Initialize embedding with NPU include reshape model
+            batch_size = 1
+            embedding_model_kwargs = {"device": self.embedding_device, "compile": False}
+            encode_kwargs = {
+                "mean_pooling": False,
+                "normalize_embeddings": True,
+                "batch_size": batch_size,
+            }
+
             embedding = OpenVINOBgeEmbeddings(
-                model_name_or_path = os.path.join(self.cache_dir, self.embedding_model_id),
-                model_kwargs = {"device": self.embedding_device, "compile": False},
+                model_name_or_path=os.path.join(self.cache_dir, self.embedding_model_id),
+                model_kwargs=embedding_model_kwargs,
+                encode_kwargs=encode_kwargs,
             )
+
+            # Reshape embedding model if using NPU device
+            if self.embedding_device == "NPU":
+                logger.info("Using NPU device for embedding.")
+                embedding.ov_model.reshape(1, 512)
             embedding.ov_model.compile()
 
             # Initialize reranker model
-            reranker = OpenVINOReranker(
-                model_name_or_path = os.path.join(self.cache_dir, self.reranker_model_id),
-                model_kwargs = {"device": self.reranker_device},
-                top_n = 2,
-            )
+            if self.reranker_device != "NPU":
+                reranker = OpenVINOReranker(
+                    model_name_or_path=os.path.join(self.cache_dir, self.reranker_model_id),
+                    model_kwargs={"device": self.reranker_device},
+                    top_n=2,
+                )
+            else:
+                logger.info("Using NPU device for rerank")
+                core = ov.Core()
+                # load and reshape model
+                ov_rerank_model = core.read_model(f"{self.cache_dir}/{self.reranker_model_id}/openvino_model.xml")
+
+                # A reranker model like 'BAAI/bge-reranker-large' has three inputs:
+                # 'input_ids', 'attention_mask', and 'token_type_ids'.
+                # They all need to be reshaped to a static shape, e.g., [1, 512].
+                # This creates a dictionary mapping input names to their new shapes.
+                new_shape = ov.PartialShape([1, 512])
+                port_to_shape = {
+                    "input_ids": new_shape,
+                    "attention_mask": new_shape,
+                }
+                ov_rerank_model.reshape(port_to_shape)
+
+                # --- Compile the reshaped model specifically for the NPU device ---
+                compiled_ov_model = core.compile_model(ov_rerank_model, device_name="NPU")
+
+                # --- Use the pre-compiled model with OpenVINOReranker ---
+                # --- Use the pre-compiled model with OpenVINOReranker ---
+                # Pass the compiled model object directly to the reranker.
+                reranker = OpenVINOReranker(
+                    model_name_or_path=os.path.join(self.cache_dir, self.reranker_model_id),
+                    ov_model=compiled_ov_model,
+                    top_n=2,
+                )
         else:
             embedding = None
             reranker = None
 
         # Initialize LLM
-        llm = HuggingFacePipeline.from_model_id(
-            model_id = os.path.join(self.cache_dir, self.llm_model_id),
-            task = "text-generation",
-            backend = "openvino",
-            model_kwargs = {
-                "device": self.llm_device,
-                "ov_config": {
-                    "PERFORMANCE_HINT": "LATENCY",
-                    "NUM_STREAMS": "1",
-                    "CACHE_DIR": os.path.join(self.cache_dir, self.llm_model_id, "model_cache"),
+        if self.llm_device != "NPU":
+            llm = HuggingFacePipeline.from_model_id(
+                model_id = os.path.join(self.cache_dir, self.llm_model_id),
+                task = "text-generation",
+                backend = "openvino",
+                model_kwargs = {
+                    "device": self.llm_device,
+                    "ov_config": {
+                        "PERFORMANCE_HINT": "LATENCY",
+                        "NUM_STREAMS": "1",
+                        "CACHE_DIR": os.path.join(self.cache_dir, self.llm_model_id, "model_cache"),
+                    },
+                    "trust_remote_code": True,
                 },
-                "trust_remote_code": True,
-            },
-            pipeline_kwargs = {"max_new_tokens": self.max_tokens},
-        )
+                pipeline_kwargs = {"max_new_tokens": self.max_tokens},
+            )
 
-        if llm.pipeline.tokenizer.eos_token_id:
-            llm.pipeline.tokenizer.pad_token_id = llm.pipeline.tokenizer.eos_token_id
+            if llm.pipeline.tokenizer.eos_token_id:
+                llm.pipeline.tokenizer.pad_token_id = llm.pipeline.tokenizer.eos_token_id
+
+        else:
+            pipeline_config = { "MAX_PROMPT_LEN": 2048 }
+            llm = OpenVINOLLM.from_model_path(
+                model_path = os.path.join(self.cache_dir, self.llm_model_id),
+                device = self.llm_device,
+                **pipeline_config
+            )
+
+            llm.config.max_new_tokens = self.max_tokens
+
 
         return embedding, llm, reranker
 

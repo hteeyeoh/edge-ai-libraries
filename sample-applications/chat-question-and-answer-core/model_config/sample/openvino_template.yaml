@@ -51,7 +51,7 @@ device_settings:
   # Specify the device for each model. Options: "CPU", "GPU"
   EMBEDDING_DEVICE: "CPU"
   RERANKER_DEVICE: "CPU"
-  LLM_DEVICE: "CPU"
+  LLM_DEVICE: "NPU"
 
 # Notes:
 # - Ensure all model IDs are valid and accessible.
