@@ -5,18 +5,13 @@ import { FC } from 'react';
 import { useTranslation } from 'react-i18next';
 import styled from 'styled-components';
 import { Button } from '@carbon/react';
-import { Document, Rag } from '@carbon/icons-react';
 
 import { FlexDiv } from '../Conversation/ConversationMessage.tsx';
-import Drawer from '../Drawer/Drawer.tsx';
-import { useDisclosure } from '../../hooks/useDisclosure.ts';
 import { useAppDispatch, useAppSelector } from '../../redux/store.ts';
 import {
   conversationSelector,
   newConversation,
 } from '../../redux/conversation/conversationSlice';
-import FileList from '../Drawer/FileList.tsx';
-import { TitleContainer } from '../Drawer/FileList.tsx';
 
 const StyledDiv = styled.div`
   display: flex;
@@ -73,8 +68,6 @@ const Navbar: FC = () => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
 
-  const [isDrawerOpen, { open: openDrawer, close: closeDrawer }] =
-    useDisclosure(false);
   const { isGenerating, selectedConversationId } =
     useAppSelector(conversationSelector);
 
@@ -83,48 +76,22 @@ const Navbar: FC = () => {
   };
 
   return (
-    <>
-      <StyledDiv data-testid='navbar-wrapper'>
-        <Logo>{t('chatqna')}</Logo>
-        <FlexDiv>
-          {selectedConversationId && (
-            <StyledButton
-              kind='ghost'
-              onClick={handleNewConversation}
-              disabled={isGenerating}
-              data-testid='ask-question-button'
-            >
-              <Icon style={{ paddingBottom: '1px' }}>+</Icon>
-              {t('askQuestion')}
-            </StyledButton>
-          )}
+    <StyledDiv data-testid='navbar-wrapper'>
+      <Logo>{t('chatqna')}</Logo>
+      <FlexDiv>
+        {selectedConversationId && (
           <StyledButton
-            kind='tertiary'
-            onClick={openDrawer}
+            kind='ghost'
+            onClick={handleNewConversation}
             disabled={isGenerating}
-            data-testid='manage-context-button'
+            data-testid='ask-question-button'
           >
-            <Icon>
-              <Document />
-            </Icon>
-            {t('manageContext')}
+            <Icon style={{ paddingBottom: '1px' }}>+</Icon>
+            {t('askQuestion')}
           </StyledButton>
-        </FlexDiv>
-      </StyledDiv>
-
-      <Drawer
-        isOpen={isDrawerOpen}
-        close={closeDrawer}
-        title={
-          <TitleContainer>
-            <Rag className='mr-8' size='1.1rem' />
-            {t('contexts')}
-          </TitleContainer>
-        }
-      >
-        <FileList closeDrawer={closeDrawer} isOpen={isDrawerOpen} />
-      </Drawer>
-    </>
+        )}
+      </FlexDiv>
+    </StyledDiv>
   );
 };
 
