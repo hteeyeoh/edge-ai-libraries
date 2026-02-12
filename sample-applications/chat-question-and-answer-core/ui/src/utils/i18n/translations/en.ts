@@ -41,7 +41,7 @@ export const enTranslations = {
   deleteFileDescription: 'This will delete the following file(s):',
   deleteLinkDescription: 'This will delete the following link(s):',
   noticeMessage: 'Development in progress',
-  chatqna: 'ChatQnA',
+  chatqna: 'Live Caption RAG',
   cancel: 'Cancel',
   confirm: 'Confirm',
   headingMsg: 'Are you sure?',
