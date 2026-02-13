@@ -68,6 +68,13 @@ def submit_file(file):
         if response.status_code == 200:
             data = response.json()
 
+            # Separate the 2nd last item as coherence summary if it contains the coherence summary key
+            if isinstance(data, list) and len(data) > 0 and "Temporal Coherence Summary" in data[-2]:
+                coherence_summary = data[-2]["Temporal Coherence Summary"]
+                coherence_comparisons = data[:-2]
+            else:
+                coherence_summary = {}
+                coherence_comparisons = data
             # Separate last item as summary if it contains the summary key
             if isinstance(data, list) and len(data) > 0 and "Factual Consistency Summary" in data[-1]:
                 summary = data[-1]["Factual Consistency Summary"]
@@ -133,9 +140,18 @@ def submit_file(file):
             else:
                 summary_text = str(summary)
 
-            title_header = "### Factual Consistency Summary"
+            # Build coherence summary markdown table
+            if isinstance(coherence_summary, dict):
+                cohe_summary_rows = [f"| {k} | {v} |" for k, v in coherence_summary.items()]
+                cohe_text = "| Metric | Value |\n|---|---|\n" + "\n".join(cohe_summary_rows)
+            else:
+                cohe_text = str(coherence_summary)
 
-            return df, summary_text, title_header
+            cohe_summary_title_header = "### Temporal Coherence Summary"
+
+            summary_title_header = "### Factual Consistency Summary"
+
+            return df, summary_text, summary_title_header, cohe_summary_title_header, cohe_text
 
         else:
             return f"Error: {response.status_code}: {response.text}"
@@ -199,11 +215,14 @@ def create_ui():
                 result_title = gr.Markdown()
                 output_summary = gr.Markdown()
 
+                coherence_result_title = gr.Markdown()
+                coherence_output_summary = gr.Markdown()
+
                 # Set up button click event
                 submit_button.click(
                     fn=submit_file,
                     inputs=[file_input],
-                    outputs=[result_table, output_summary, result_title]
+                    outputs=[result_table, output_summary, result_title, coherence_result_title, coherence_output_summary]
                 )
 
             with gr.TabItem("Metrics"):

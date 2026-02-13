@@ -239,6 +239,59 @@ class Evaluator:
             "factual_consistency": label
         }
 
+    def _evaluate_temporal_coherence_score(self, order_indices: list = []) -> dict:
+        """Evaluates the temporal coherence of a generated summary based on the order of matched sentences compared to a reference summary.
+        The function calculates two metrics:
+        1. Temporal Coherence Score: Measures the proportion of sentences that are in the correct order based on the indices of matched sentences.
+        2. Pairwise Order Accuracy: Evaluates the accuracy of the order of sentences by comparing all pairs of sentences and counting how many are in the correct order.
+        The results include the order indices, temporal coherence score, pairwise order accuracy, and counts of temporal violations and out-of-order pairs.
+        Args:
+            order_indices (list): A list of indices representing the order of matched sentences in the generated summary compared to the reference summary.
+        Returns:
+            dict: A dictionary containing the order indices, temporal coherence score, pairwise order accuracy, and counts of temporal violations and out-of-order pairs.
+        """
+        logger.info("Evaluating temporal coherence...")
+        n = len(order_indices)
+
+        if n <= 1:
+            return {
+                'order_indices': order_indices,
+                'temporal_score': 1.0,
+                'pairwise_order_accuracy': 1.0,
+                'temporal_violations': 0,
+                'out_of_order_pairs': 0,
+                'total_pairs': 0
+            }
+
+        # Calculate both metrics in combined loops
+        temporal_violations = 0
+        out_of_order = 0
+        total_pairs = 0
+
+        # Backward jump check
+        for i in range(1, n):
+            if order_indices[i] < order_indices[i - 1]:
+                temporal_violations += 1
+
+        # Pairwise accuracy
+        for i in range(n):
+            for j in range(i + 1, n):
+                total_pairs += 1
+                if order_indices[j] < order_indices[i]:
+                    out_of_order += 1
+
+        temporal_score = round(1 - temporal_violations / (n - 1), 3)
+        pairwise_order_accuracy = round(1 - out_of_order / total_pairs, 3)
+
+        return {
+            'order_indices': order_indices,
+            'temporal_score': temporal_score,
+            'pairwise_order_accuracy': pairwise_order_accuracy,
+            'temporal_violations': temporal_violations,
+            'out_of_order_pairs': out_of_order,
+            'total_pairs': total_pairs
+        }
+
     def _evaluate_summaries(self, reference: str="", generated: str="") -> list[Dict[str, Any]]:
         """
         Evaluates the factual consistency between a reference summary and a generated summary using sentence similarity and Natural Language Inference (NLI).
@@ -273,6 +326,9 @@ class Evaluator:
         neutral_count = 0
         total_cosine_score = 0
 
+        # Order indices
+        order_indices = []
+
         # Split the texts into sentences
         ref_sentences = sent_tokenize(reference)
         gen_sentences = sent_tokenize(generated)
@@ -286,6 +342,7 @@ class Evaluator:
             ref_embedding = self.sentence_model.encode(ref_sentence, convert_to_tensor=True)
             cosine_scores = util.cos_sim(ref_embedding, gen_embeddings)[0]
             best_match_idx = torch.argmax(cosine_scores).item()
+            order_indices.append(best_match_idx)
             best_match_sentence = gen_sentences[best_match_idx]
 
             # Evaluate factual consistency using NLI model
@@ -303,7 +360,6 @@ class Evaluator:
             rouge1_score = rouge_result["rouge1"]
             rouge2_score = rouge_result["rouge2"]
             rougel_score = rouge_result["rougeL"]
-
 
             results.append(
                 {
@@ -338,6 +394,12 @@ class Evaluator:
             contradiction_ratio = contradiction_count / total if total > 0 else 0
             total_cosine_score += float(cosine_scores[best_match_idx].item())
 
+        temporal_coherence_score = self._evaluate_temporal_coherence_score(order_indices)
+
+        results.append({
+            "Temporal Coherence Summary": temporal_coherence_score
+        })
+
         results.append({
             "Factual Consistency Summary": {
                 "total_sentences_compared": total,
@@ -349,6 +411,7 @@ class Evaluator:
                 "neutral_ratio": round(neutral_ratio, 2),
                 "contradiction_ratio": round(contradiction_ratio, 2),
                 "average_cosine_score": f"{round(total_cosine_score / total, 2)}/1.0" if total > 0 else 0
+
             }
         })
 
