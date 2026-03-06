@@ -68,44 +68,50 @@ def submit_file(file):
         if response.status_code == 200:
             data = response.json()
 
-            # Separate the 2nd last item as coherence summary if it contains the coherence summary key
-            if isinstance(data, list) and len(data) > 0 and "Temporal Coherence Summary" in data[-2]:
-                coherence_summary = data[-2]["Temporal Coherence Summary"]
-                coherence_comparisons = data[:-2]
-            else:
-                coherence_summary = {}
-                coherence_comparisons = data
-            # Separate last item as summary if it contains the summary key
-            if isinstance(data, list) and len(data) > 0 and "Factual Consistency Summary" in data[-1]:
+            # ---------- A) Extract summaries FIRST from original `data` ----------
+            summary = {}
+            coherence_summary = {}
+
+            # Defensive checks
+            is_list = isinstance(data, list)
+
+            # Factual summary is expected as the LAST item
+            if is_list and len(data) >= 1 and isinstance(data[-1], dict) and "Factual Consistency Summary" in data[-1]:
                 summary = data[-1]["Factual Consistency Summary"]
-                comparisons = data[:-1]
+                data_wo_last = data[:-1]
             else:
-                summary = {}
-                comparisons = data
+                data_wo_last = data
 
-            # df = pd.DataFrame(comparisons)
-            # df.insert(0, "No.", range(1, len(df) + 1))
+            # Temporal coherence summary is expected as the SECOND LAST item (which is now the LAST of data_wo_last, after removing factual summary)
+            if isinstance(data_wo_last, list) and len(data_wo_last) >= 1 and isinstance(data_wo_last[-1], dict) and "Temporal Coherence Summary" in data_wo_last[-1]:
+                coherence_summary = data_wo_last[-1]["Temporal Coherence Summary"]
+                rows_source = data_wo_last[:-1]   # drop that as well
+            else:
+                rows_source = data_wo_last
 
-            # Build the table with a single JSON column for bert_score
+            # ---------- B) Build the comparisons table from `rows_source` ----------
+            REQUIRED_KEYS = {"reference_sentence", "matched_sentence"}
+            comparisons = [
+                dict(r) for r in (rows_source or [])
+                if isinstance(r, dict) and REQUIRED_KEYS.issubset(r.keys())
+            ]
+
+            # Pretty-print JSON fields without mutating the originals
+            for row in comparisons:
+                bs = row.get("bert_score")
+                row["bert_score"] = (
+                    json.dumps(bs, indent=2, ensure_ascii=False)
+                    if isinstance(bs, dict) else ("" if bs is None else str(bs))
+                )
+                rs = row.get("rouge_score")
+                row["rouge_score"] = (
+                    json.dumps(rs, indent=2, ensure_ascii=False)
+                    if isinstance(rs, dict) else ("" if rs is None else str(rs))
+                )
+
             if not comparisons:
                 df = pd.DataFrame()
             else:
-                # Turn bert_score dict into a pretty-printed JSON string in one column
-                for row in comparisons:
-                    bs = row.get("bert_score")
-                    row["bert_score"] = (
-                        json.dumps(bs, indent=2, ensure_ascii=False)
-                        if isinstance(bs, dict) else str(bs)
-                    )
-
-                    rs = row.get("rouge_score")
-                    row["rouge_score"] = (
-                        json.dumps(rs, indent=2, ensure_ascii=False)
-                        if isinstance(rs, dict) else str(rs)
-                    )
-
-
-                # Create DataFrame and rename columns for display
                 df = pd.DataFrame(comparisons)
                 rename_map = {
                     "reference_sentence": "Reference Sentence",
@@ -113,45 +119,60 @@ def submit_file(file):
                     "similarity_score": "Cosine Similarity",
                     "factual_consistency": "NLI Label",
                     "bert_score": "BERT Score",
-                    "rouge_score": "ROUGE Score"
+                    "rouge_score": "ROUGE Score",
                 }
                 df = df.rename(columns=rename_map)
+
+                # Safety: drop rows that are entirely empty in core columns
+                core_cols = [c for c in ["Reference Sentence", "Matched Sentence", "NLI Label", "Cosine Similarity"] if c in df.columns]
+                if core_cols:
+                    df = df.dropna(subset=core_cols, how="all")
 
                 # Insert running number
                 df.insert(0, "No.", range(1, len(df) + 1))
 
-                # Round numeric similarity column
+                # Round numeric
                 if "Cosine Similarity" in df.columns:
-                    df["Cosine Similarity"] = pd.to_numeric(
-                        df["Cosine Similarity"], errors="coerce"
-                    ).round(4)
+                    df["Cosine Similarity"] = pd.to_numeric(df["Cosine Similarity"], errors="coerce").round(4)
 
-                # Optional: explicit column order if you like
-                desired_cols = [
-                    "No.", "Reference Sentence", "Matched Sentence",
-                    "NLI Label", "Cosine Similarity", "BERT Score", "ROUGE Score"
-                ]
+                # Desired order
+                desired_cols = ["No.", "Reference Sentence", "Matched Sentence", "NLI Label", "Cosine Similarity", "BERT Score", "ROUGE Score"]
                 df = df[[c for c in desired_cols if c in df.columns]]
 
-            # Build summary markdown table
-            if isinstance(summary, dict):
-                summary_rows = [f"| {k} | {v} |" for k, v in summary.items()]
-                summary_text = "| Metric | Value |\n|---|---|\n" + "\n".join(summary_rows)
-            else:
-                summary_text = str(summary)
+            # Final guard, fix numbering after any drops
+            if not df.empty:
+                df = df.dropna(how="all").reset_index(drop=True)
+                if "No." in df.columns:
+                    df["No."] = range(1, len(df) + 1)
 
-            # Build coherence summary markdown table
-            if isinstance(coherence_summary, dict):
-                cohe_summary_rows = [f"| {k} | {v} |" for k, v in coherence_summary.items()]
-                cohe_text = "| Metric | Value |\n|---|---|\n" + "\n".join(cohe_summary_rows)
-            else:
-                cohe_text = str(coherence_summary)
+            # ---------- C) Build summary outputs ----------
+            # If your summary blocks are Dataframes in the UI (as your screenshot suggests)
+            # build small 2-column tables: Metric | Value
+            def as_summary_df(d: dict) -> pd.DataFrame:
+                if isinstance(d, dict) and d:
+                    return pd.DataFrame(list(d.items()), columns=["Metric", "Value"])
+                return pd.DataFrame(columns=["Metric", "Value"])
 
-            cohe_summary_title_header = "### Temporal Coherence Summary"
+            factual_df = as_summary_df(summary)
+            coherence_df = as_summary_df(coherence_summary)
 
-            summary_title_header = "### Factual Consistency Summary"
+            # Prepare updates (fix row_count so no blank trailing row appears)
+            result_table_update = gr.update(value=df, row_count=(len(df), "fixed"))
+            factual_update = gr.update(value=factual_df, row_count=(len(factual_df), "fixed"))
+            coherence_update = gr.update(value=coherence_df, row_count=(len(coherence_df), "fixed"))
 
-            return df, summary_text, summary_title_header, cohe_summary_title_header, cohe_text
+            # Titles (if you have Text components for titles)
+            result_title_text = f"Sentence Comparisons ({len(df)} rows)" if not df.empty else "Sentence Comparisons"
+            factual_title_text = "Factual Consistency Summary"
+            coherence_title_text = "Temporal Coherence Summary"
+
+            # Return in your expected order:
+            # outputs=[result_table, output_summary, result_title, coherence_result_title, coherence_output_summary]
+            return (
+                result_table_update,
+                factual_update,
+                coherence_update,
+            )
 
         else:
             return f"Error: {response.status_code}: {response.text}"
@@ -210,19 +231,21 @@ def create_ui():
                 submit_button = gr.Button("Submit")
 
                 # Output display component
-                result_table = gr.Dataframe(label="Sentence Comparisons", interactive=False)
+                result_table = gr.Dataframe(
+                    label="Sentence Comparisons",
+                    interactive=False,
+                    row_count=(0, "fixed")
+                )
 
-                result_title = gr.Markdown()
-                output_summary = gr.Markdown()
-
-                coherence_result_title = gr.Markdown()
-                coherence_output_summary = gr.Markdown()
+                # Factual consistency summary and temporal coherence summary as separate dataframes
+                output_summary = gr.Dataframe(label="Factual Consistency Summary", interactive=False, row_count=(0, "fixed"))
+                coherence_output_summary = gr.Dataframe(label="Temporal Coherence Summary", interactive=False, row_count=(0, "fixed"))
 
                 # Set up button click event
                 submit_button.click(
                     fn=submit_file,
                     inputs=[file_input],
-                    outputs=[result_table, output_summary, result_title, coherence_result_title, coherence_output_summary]
+                    outputs=[result_table, output_summary, coherence_output_summary]
                 )
 
             with gr.TabItem("Metrics"):
