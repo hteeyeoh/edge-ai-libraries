@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 from nltk.tokenize import sent_tokenize
 from rouge_score import rouge_scorer
 from sentence_transformers import SentenceTransformer, util
+from scipy.stats import kendalltau
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from typing import Dict, Any
 import csv
@@ -206,6 +207,26 @@ class Evaluator:
         }
 
 
+    def _calculate_kendall_tau_norm(self, order_indices: list = []) -> float:
+        """
+        Calculate normalized Kendall's tau correlation coefficient.
+
+        Args:
+            order_indices (list): List of indices representing order
+
+        Returns:
+            float or None: Normalized Kendall's tau value (0-1 range) or None if invalid
+        """
+        positions = list(range(len(order_indices)))
+        tau, _ = kendalltau(positions, order_indices)
+
+        kendall_tau_norm = None
+        if tau is not None and not (isinstance(tau, float) and (tau != tau)):  # not NaN
+            kendall_tau_norm = (tau + 1.0) / 2.0  # map from [-1,1] to [0,1]
+
+        return round(kendall_tau_norm, 3) if kendall_tau_norm is not None else None
+
+
     def _evaluate_factual_consistency(self, generated: str="", reference: str="") -> str:
         """
         Evaluates the factual consistency between a generated sentence and a reference sentence using a Natural Language Inference (NLI) model.
@@ -238,6 +259,7 @@ class Evaluator:
             "generated": generated,
             "factual_consistency": label
         }
+
 
     def _evaluate_temporal_coherence_score(self, order_indices: list = []) -> dict:
         """Evaluates the temporal coherence of a generated summary based on the order of matched sentences compared to a reference summary.
@@ -283,14 +305,19 @@ class Evaluator:
         temporal_score = round(1 - temporal_violations / (n - 1), 3)
         pairwise_order_accuracy = round(1 - out_of_order / total_pairs, 3)
 
+        # Calculate kendall's tau correlation coefficient
+        kendall_tau_norm = self._calculate_kendall_tau_norm(order_indices)
+
         return {
             'order_indices': order_indices,
             'temporal_score': temporal_score,
             'pairwise_order_accuracy': pairwise_order_accuracy,
             'temporal_violations': temporal_violations,
             'out_of_order_pairs': out_of_order,
-            'total_pairs': total_pairs
+            'total_pairs': total_pairs,
+            'kendall_tau_norm': kendall_tau_norm
         }
+
 
     def _evaluate_summaries(self, reference: str="", generated: str="") -> list[Dict[str, Any]]:
         """
@@ -416,6 +443,7 @@ class Evaluator:
         })
 
         return results
+
 
 
     def run_evaluation_from_file(self, file_path:str) -> list[Dict[str, Any]]:

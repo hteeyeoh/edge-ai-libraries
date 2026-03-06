@@ -16,6 +16,7 @@ pydantic-settings = "2.10.1"
 rouge-score = "^0.1.2"
 sentence-transformers = "5.0.0"
 uvicorn = "0.35.0"
+spicy = "0.16.0"
 #optax = "^0.1.6"
 
 [tool.poetry.group.dev.dependencies]
