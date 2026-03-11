@@ -423,12 +423,6 @@ class Evaluator:
                     "contradiction_ratio": float
         """
 
-        # Initialize counters
-        entailment_count = 0
-        contradiction_count = 0
-        neutral_count = 0
-        total_cosine_score = 0
-
         # Order indices
         order_indices = []
 
@@ -483,41 +477,33 @@ class Evaluator:
                 }
             )
 
-            if factual_consistency_label == "entailment":
-                entailment_count += 1
-            elif factual_consistency_label == "neutral":
-                neutral_count += 1
-            else:
-                contradiction_count += 1
-
-            # Calculate total and proportions
-            total = entailment_count + neutral_count + contradiction_count
-            entailment_ratio = entailment_count / total if total > 0 else 0
-            neutral_ratio = neutral_count / total if total > 0 else 0
-            contradiction_ratio = contradiction_count / total if total > 0 else 0
-            total_cosine_score += float(cosine_scores[best_match_idx].item())
-
         temporal_coherence_score = self._evaluate_temporal_coherence_score(order_indices)
+
+        # Derive r→g stats directly from the per-sentence results already computed above
+        labels_rg = [r["factual_consistency"] for r in results]
+        total_rg = len(labels_rg)
+        entailment_rg = labels_rg.count("entailment")
+        neutral_rg = labels_rg.count("neutral")
+        contradiction_rg = total_rg - entailment_rg - neutral_rg
+        total_cosine_rg = round(sum(r["similarity_score"] for r in results), 4)
+        stats_rg = {
+            "total": total_rg,
+            "entailment": entailment_rg,
+            "neutral": neutral_rg,
+            "contradiction": contradiction_rg,
+            "total_cosine_score": total_cosine_rg,
+            "entailment_ratio": round(entailment_rg / total_rg, 4) if total_rg > 0 else 0,
+            "neutral_ratio": round(neutral_rg / total_rg, 4) if total_rg > 0 else 0,
+            "contradiction_ratio": round(contradiction_rg / total_rg, 4) if total_rg > 0 else 0,
+            "average_cosine_score": round(total_cosine_rg / total_rg, 4) if total_rg > 0 else 0,
+        }
+        stats_gr = self._compute_factual_stats(generated, reference)
 
         # Calculate MENLI score: mean of bidirectional NLI entailment scores
         # (reference->generated + generated->reference) / 2
         ref_to_gen = self._calculate_nli_entailment_score(premise=reference, hypothesis=generated)
         gen_to_ref = self._calculate_nli_entailment_score(premise=generated, hypothesis=reference)
         menli_score = round((ref_to_gen + gen_to_ref) / 2, 4)
-
-        # Compute g→r stats and average with r→g stats for bidirectional Factual Consistency Summary
-        stats_rg = {
-            "total": total,
-            "entailment": entailment_count,
-            "neutral": neutral_count,
-            "contradiction": contradiction_count,
-            "total_cosine_score": round(total_cosine_score, 4),
-            "entailment_ratio": round(entailment_ratio, 4),
-            "neutral_ratio": round(neutral_ratio, 4),
-            "contradiction_ratio": round(contradiction_ratio, 4),
-            "average_cosine_score": round(total_cosine_score / total, 4) if total > 0 else 0,
-        }
-        stats_gr = self._compute_factual_stats(generated, reference)
 
         def _avg(a, b):
             return round((a + b) / 2, 4)
