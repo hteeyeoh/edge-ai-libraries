@@ -146,9 +146,10 @@ def submit_file(file):
                     df["No."] = range(1, len(df) + 1)
 
             # ---------- C) Build summary outputs ----------
-            # If your summary blocks are Dataframes in the UI (as your screenshot suggests)
-            # build small 2-column tables: Metric | Value
-            def as_summary_df(d: dict) -> pd.DataFrame:
+            # Factual summary is a list-of-dicts (3 columns); coherence summary is a flat dict
+            def as_summary_df(d) -> pd.DataFrame:
+                if isinstance(d, list) and d:
+                    return pd.DataFrame(d)
                 if isinstance(d, dict) and d:
                     return pd.DataFrame(list(d.items()), columns=["Metric", "Value"])
                 return pd.DataFrame(columns=["Metric", "Value"])
@@ -175,10 +176,22 @@ def submit_file(file):
             )
 
         else:
-            return f"Error: {response.status_code}: {response.text}"
+            error_df = pd.DataFrame([{"Error": f"{response.status_code}: {response.text}"}])
+            empty_df = pd.DataFrame()
+            return (
+                gr.update(value=error_df, row_count=(1, "fixed")),
+                gr.update(value=empty_df, row_count=(0, "fixed")),
+                gr.update(value=empty_df, row_count=(0, "fixed")),
+            )
 
     except Exception as e:
-        return f"Request failed: {str(e)}"
+        error_df = pd.DataFrame([{"Error": str(e)}])
+        empty_df = pd.DataFrame()
+        return (
+            gr.update(value=error_df, row_count=(1, "fixed")),
+            gr.update(value=empty_df, row_count=(0, "fixed")),
+            gr.update(value=empty_df, row_count=(0, "fixed")),
+        )
 
 
 def evaluate_metrics(reference, generated, metric):

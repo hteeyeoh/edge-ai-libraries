@@ -227,6 +227,29 @@ class Evaluator:
         return round(kendall_tau_norm, 3) if kendall_tau_norm is not None else None
 
 
+    def _calculate_nli_entailment_score(self, premise: str = "", hypothesis: str = "") -> float:
+        """
+        Calculate the NLI entailment probability score for a (premise, hypothesis) pair.
+
+        Args:
+            premise (str): The premise text.
+            hypothesis (str): The hypothesis text.
+
+        Returns:
+            float: Probability of entailment (0–1).
+        """
+        inputs = self.nli_tokenizer(premise, hypothesis, return_tensors="pt", truncation=True)
+        with torch.no_grad():
+            logits = self.nli_model(**inputs).logits
+        probs = torch.softmax(logits, dim=1)[0]
+        # Find the index for the 'entailment' label
+        entailment_idx = next(
+            (idx for idx, lbl in self.nli_model.config.id2label.items() if lbl.lower() == "entailment"),
+            0
+        )
+        return round(float(probs[entailment_idx].item()), 4)
+
+
     def _evaluate_factual_consistency(self, generated: str="", reference: str="") -> str:
         """
         Evaluates the factual consistency between a generated sentence and a reference sentence using a Natural Language Inference (NLI) model.
@@ -319,6 +342,59 @@ class Evaluator:
         }
 
 
+    def _compute_factual_stats(self, source: str = "", target: str = "") -> dict:
+        """
+        Compute factual consistency statistics by matching each source sentence
+        to its best match in target sentences.
+
+        Args:
+            source (str): Source text whose sentences are iterated.
+            target (str): Target text to match against.
+
+        Returns:
+            dict: Counts and ratios for entailment, neutral, contradiction and cosine scores.
+        """
+        entailment_count = 0
+        contradiction_count = 0
+        neutral_count = 0
+        total_cosine_score = 0.0
+
+        src_sentences = sent_tokenize(source)
+        tgt_sentences = sent_tokenize(target)
+        tgt_embeddings = self.sentence_model.encode(tgt_sentences, convert_to_tensor=True)
+
+        for src_sentence in src_sentences:
+            src_embedding = self.sentence_model.encode(src_sentence, convert_to_tensor=True)
+            cosine_scores = util.cos_sim(src_embedding, tgt_embeddings)[0]
+            best_match_idx = torch.argmax(cosine_scores).item()
+            best_match_sentence = tgt_sentences[best_match_idx]
+
+            factual_result = self._evaluate_factual_consistency(best_match_sentence, src_sentence)
+            label = factual_result["factual_consistency"]
+
+            if label == "entailment":
+                entailment_count += 1
+            elif label == "neutral":
+                neutral_count += 1
+            else:
+                contradiction_count += 1
+
+            total_cosine_score += float(cosine_scores[best_match_idx].item())
+
+        total = entailment_count + neutral_count + contradiction_count
+        return {
+            "total": total,
+            "entailment": entailment_count,
+            "neutral": neutral_count,
+            "contradiction": contradiction_count,
+            "total_cosine_score": round(total_cosine_score, 4),
+            "entailment_ratio": round(entailment_count / total, 4) if total > 0 else 0,
+            "neutral_ratio": round(neutral_count / total, 4) if total > 0 else 0,
+            "contradiction_ratio": round(contradiction_count / total, 4) if total > 0 else 0,
+            "average_cosine_score": round(total_cosine_score / total, 4) if total > 0 else 0,
+        }
+
+
     def _evaluate_summaries(self, reference: str="", generated: str="") -> list[Dict[str, Any]]:
         """
         Evaluates the factual consistency between a reference summary and a generated summary using sentence similarity and Natural Language Inference (NLI).
@@ -346,12 +422,6 @@ class Evaluator:
                     "neutral_ratio": float,
                     "contradiction_ratio": float
         """
-
-        # Initialize counters
-        entailment_count = 0
-        contradiction_count = 0
-        neutral_count = 0
-        total_cosine_score = 0
 
         # Order indices
         order_indices = []
@@ -407,39 +477,63 @@ class Evaluator:
                 }
             )
 
-            if factual_consistency_label == "entailment":
-                entailment_count += 1
-            elif factual_consistency_label == "neutral":
-                neutral_count += 1
-            else:
-                contradiction_count += 1
-
-            # Calculate total and proportions
-            total = entailment_count + neutral_count + contradiction_count
-            entailment_ratio = entailment_count / total if total > 0 else 0
-            neutral_ratio = neutral_count / total if total > 0 else 0
-            contradiction_ratio = contradiction_count / total if total > 0 else 0
-            total_cosine_score += float(cosine_scores[best_match_idx].item())
-
         temporal_coherence_score = self._evaluate_temporal_coherence_score(order_indices)
+
+        # Derive r→g stats directly from the per-sentence results already computed above
+        labels_rg = [r["factual_consistency"] for r in results]
+        total_rg = len(labels_rg)
+        entailment_rg = labels_rg.count("entailment")
+        neutral_rg = labels_rg.count("neutral")
+        contradiction_rg = total_rg - entailment_rg - neutral_rg
+        total_cosine_rg = round(sum(r["similarity_score"] for r in results), 4)
+        stats_rg = {
+            "total": total_rg,
+            "entailment": entailment_rg,
+            "neutral": neutral_rg,
+            "contradiction": contradiction_rg,
+            "total_cosine_score": total_cosine_rg,
+            "entailment_ratio": round(entailment_rg / total_rg, 4) if total_rg > 0 else 0,
+            "neutral_ratio": round(neutral_rg / total_rg, 4) if total_rg > 0 else 0,
+            "contradiction_ratio": round(contradiction_rg / total_rg, 4) if total_rg > 0 else 0,
+            "average_cosine_score": round(total_cosine_rg / total_rg, 4) if total_rg > 0 else 0,
+        }
+        stats_gr = self._compute_factual_stats(generated, reference)
+
+        # Calculate MENLI score: mean of bidirectional NLI entailment scores
+        # (reference->generated + generated->reference) / 2
+        ref_to_gen = self._calculate_nli_entailment_score(premise=reference, hypothesis=generated)
+        gen_to_ref = self._calculate_nli_entailment_score(premise=generated, hypothesis=reference)
+        menli_score = round((ref_to_gen + gen_to_ref) / 2, 4)
+
+        def _avg(a, b):
+            return round((a + b) / 2, 4)
+
+        avg_total           = _avg(stats_rg["total"], stats_gr["total"])
+        avg_entailment      = _avg(stats_rg["entailment"], stats_gr["entailment"])
+        avg_neutral         = _avg(stats_rg["neutral"], stats_gr["neutral"])
+        avg_contradiction   = _avg(stats_rg["contradiction"], stats_gr["contradiction"])
+        avg_total_cosine    = _avg(stats_rg["total_cosine_score"], stats_gr["total_cosine_score"])
+        avg_entailment_ratio    = _avg(stats_rg["entailment_ratio"], stats_gr["entailment_ratio"])
+        avg_neutral_ratio       = _avg(stats_rg["neutral_ratio"], stats_gr["neutral_ratio"])
+        avg_contradiction_ratio = _avg(stats_rg["contradiction_ratio"], stats_gr["contradiction_ratio"])
+        avg_cosine_score    = _avg(stats_rg["average_cosine_score"], stats_gr["average_cosine_score"])
 
         results.append({
             "Temporal Coherence Summary": temporal_coherence_score
         })
 
         results.append({
-            "Factual Consistency Summary": {
-                "total_sentences_compared": total,
-                "total_cosine_score": f"{round(total_cosine_score, 4)}/{total}",
-                "entailment": entailment_count,
-                "neutral": neutral_count,
-                "contradiction": contradiction_count,
-                "entailment_ratio": round(entailment_ratio, 2),
-                "neutral_ratio": round(neutral_ratio, 2),
-                "contradiction_ratio": round(contradiction_ratio, 2),
-                "average_cosine_score": f"{round(total_cosine_score / total, 2)}/1.0" if total > 0 else 0
-
-            }
+            "Factual Consistency Summary": [
+                {"Metric": "total_sentences_compared",  "reference→generated": stats_rg["total"],               "generated→reference": stats_gr["total"],               "MENLI Score": ""},
+                {"Metric": "total_cosine_score",         "reference→generated": f"{stats_rg['total_cosine_score']}/{stats_rg['total']}", "generated→reference": f"{stats_gr['total_cosine_score']}/{stats_gr['total']}", "MENLI Score": f"{avg_total_cosine}/{avg_total}"},
+                {"Metric": "entailment",                 "reference→generated": stats_rg["entailment"],          "generated→reference": stats_gr["entailment"],          "MENLI Score": avg_entailment},
+                {"Metric": "neutral",                    "reference→generated": stats_rg["neutral"],             "generated→reference": stats_gr["neutral"],             "MENLI Score": avg_neutral},
+                {"Metric": "contradiction",              "reference→generated": stats_rg["contradiction"],       "generated→reference": stats_gr["contradiction"],       "MENLI Score": avg_contradiction},
+                {"Metric": "entailment_ratio",           "reference→generated": stats_rg["entailment_ratio"],    "generated→reference": stats_gr["entailment_ratio"],    "MENLI Score": avg_entailment_ratio},
+                {"Metric": "neutral_ratio",              "reference→generated": stats_rg["neutral_ratio"],       "generated→reference": stats_gr["neutral_ratio"],       "MENLI Score": avg_neutral_ratio},
+                {"Metric": "contradiction_ratio",        "reference→generated": stats_rg["contradiction_ratio"], "generated→reference": stats_gr["contradiction_ratio"], "MENLI Score": avg_contradiction_ratio},
+                {"Metric": "average_cosine_score",       "reference→generated": f"{stats_rg['average_cosine_score']}/1.0", "generated→reference": f"{stats_gr['average_cosine_score']}/1.0", "MENLI Score": f"{avg_cosine_score}/1.0"},
+            ]
         })
 
         return results
