@@ -1,5 +1,5 @@
 # -------- Stage 1: Ubuntu 22.04 Sources --------
-FROM intel/dlstreamer-pipeline-server:3.1.0-extended-ubuntu22 AS ubuntu22-builder
+FROM intel/dlstreamer-pipeline-server:2026.0.0-extended-ubuntu22 AS ubuntu22-builder
 LABEL stage="ubuntu22"
 
 USER root
@@ -13,6 +13,7 @@ COPY ./thirdparty/third_party_deb_apk_deps_ubuntu22.txt /thirdparty/
 
 RUN sed -Ei 's/^# deb-src /deb-src /' /etc/apt/sources.list && \
     apt-get update && \
+    apt-get install -y --no-install-recommends --no-act build-essential >/dev/null 2>&1 || true && \
     mkdir -p /sources/ubuntu22 && cd /sources/ubuntu22 && \
     for package in $(cat /thirdparty/third_party_deb_apk_deps_ubuntu22.txt | xargs -n1); do \
         grep -l GPL /usr/share/doc/${package}/copyright; \
@@ -23,7 +24,7 @@ RUN sed -Ei 's/^# deb-src /deb-src /' /etc/apt/sources.list && \
     done
 
 # -------- Stage 2: Ubuntu 24.04 Sources --------
-FROM intel/dlstreamer-pipeline-server:3.1.0-extended-ubuntu24 AS ubuntu24-builder
+FROM intel/dlstreamer-pipeline-server:2026.0.0-extended-ubuntu24 AS ubuntu24-builder
 LABEL stage="ubuntu24"
 
 USER root
@@ -39,6 +40,7 @@ RUN echo "deb-src http://archive.ubuntu.com/ubuntu noble main restricted univers
     echo "deb-src http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse" >> /etc/apt/sources.list && \
     echo "deb-src http://archive.ubuntu.com/ubuntu noble-security main restricted universe multiverse" >> /etc/apt/sources.list && \
     apt-get update && \
+    apt-get install -y --no-install-recommends --no-act build-essential >/dev/null 2>&1 || true && \
     mkdir -p /sources/ubuntu24 && cd /sources/ubuntu24 && \
     for package in $(cat /thirdparty/third_party_deb_apk_deps_ubuntu24.txt  | xargs -n1); do \
         grep -l GPL /usr/share/doc/${package}/copyright; \

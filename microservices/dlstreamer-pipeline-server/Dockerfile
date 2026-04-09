@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=intel/dlstreamer:2025.1.2-ubuntu22
+ARG BASE_IMAGE=intel/dlstreamer:2026.0.0-ubuntu24
 FROM ${BASE_IMAGE} AS gstudfloader-builder
 
 USER root
@@ -37,7 +37,7 @@ RUN \
 RUN \
     python3 -m venv /python3venv && \
     /python3venv/bin/pip3 install --no-cache-dir --upgrade pip && \
-    /python3venv/bin/pip3 install --no-cache-dir --no-dependencies PyGObject==3.50.0 setuptools==78.1.1 numpy==2.2.0 tqdm==4.67.1 opencv-python==4.11.0.86
+    /python3venv/bin/pip3 install --no-cache-dir --no-dependencies PyGObject==3.50.0 setuptools==82.0.1 numpy==2.2.0 tqdm==4.67.1 opencv-python==4.11.0.86
 
 ENV VIRTUAL_ENV=/python3venv
 ENV PATH=$VIRTUAL_ENV/bin:$PATH
@@ -128,6 +128,8 @@ RUN . /etc/os-release && \
     if [ "$VERSION_ID" = "24.04" ]; then \
         export no_proxy= && \
         apt-get update --allow-releaseinfo-change && apt-get install -y --no-install-recommends \
+        cpuid \
+        util-linux \
         python3-venv \
         libglib2.0-0 \
         libusb-1.0-0 \
@@ -141,6 +143,8 @@ RUN . /etc/os-release && \
     else \
         export no_proxy= && \
         apt-get update --allow-releaseinfo-change && apt-get install -y --no-install-recommends \
+        cpuid \
+        util-linux \
         python3-venv \
         libglib2.0-0 \
         libusb-1.0-0 \
@@ -208,13 +212,13 @@ RUN mkdir -p $XDG_RUNTIME_DIR && chmod -R g+s $XDG_RUNTIME_DIR && chown ${USER}:
 USER $USER
 
 # Copy source code
-COPY ./docker/run.sh .
+COPY ./docker/run.sh ./docker/detect-cores.sh ./
 COPY ./utils/*.py ./utils/
 COPY ./src/ ./src
 
 USER root
 
-RUN pip3 install --no-cache-dir wheel==0.45.1 setuptools==80.9.0 packaging==25.0 && \
+RUN pip3 install --no-cache-dir wheel==0.46.2 setuptools==82.0.1 packaging==25.0 && \
     pip3 uninstall --no-cache-dir -y Flask && \
     # Downgrading Flask due to an atttribute error(JSONEncoder)
     pip3 install --no-cache-dir Flask==2.2.5 && \
@@ -279,11 +283,11 @@ RUN . /etc/os-release && \
         curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.87.0 && \
         echo 'source $HOME/.cargo/env' >> ~/.bashrc && \
         export PATH="/root/.cargo/bin:$PATH" && \
-        pip3 install --no-cache-dir geti-sdk==2.7.1 && \
+        pip3 install --no-cache-dir geti-sdk==2.13.1 && \
         # clean up Rust installation files
         rm -rf /root/.cargo /root/.rustup; \
     else \
-        pip3 install --no-cache-dir geti-sdk==2.7.1; \
+        pip3 install --no-cache-dir geti-sdk==2.13.1; \
     fi && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /root/.cache
@@ -316,6 +320,11 @@ RUN apt update && \
     apt clean && \
     rm -rf /var/lib/apt/lists/*
     
-RUN pip3 install --no-cache-dir --upgrade openvino==2025.2.0 openvino-telemetry==2025.2.0
+RUN pip3 install --no-cache-dir --upgrade openvino==2026.0.0 openvino-telemetry==2025.2.0
+
+RUN . /etc/os-release && \
+    if [ "$VERSION_ID" = "22.04" ]; then \
+        rm /opt/intel/dlstreamer/gstreamer/lib/libsqlite3.so* ; \
+    fi
 
 USER ${USER}

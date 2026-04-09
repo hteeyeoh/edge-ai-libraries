@@ -1,6 +1,5 @@
 // Copyright (C) 2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
-
 import {
   Injectable,
   Logger,
@@ -13,10 +12,10 @@ import { DatastoreService } from 'src/datastore/services/datastore.service';
 import { v4 as uuidv4 } from 'uuid';
 import { unlink } from 'fs';
 import { VideoDbService } from './video-db.service';
-import { SearchDataPrepShimService } from 'src/search/services/search-data-prep-shim.service';
-import { DataPrepMinioDTO } from 'src/search/model/search.model';
 import { lastValueFrom } from 'rxjs';
-import { Span } from 'nestjs-otel';
+import { TagsService } from './tags.service';
+import { DataPrepShimService } from 'src/data-prep/services/data-prep-shim.service';
+import { DataPrepMinioDTO } from 'src/data-prep/models/data-prep.models';
 
 @Injectable()
 export class VideoService {
@@ -26,7 +25,8 @@ export class VideoService {
     private $validator: VideoValidatorService,
     private $datastore: DatastoreService,
     private $videoDb: VideoDbService,
-    private $dataprep: SearchDataPrepShimService,
+    private $dataprep: DataPrepShimService,
+    private $tags: TagsService,
   ) {}
 
   isStreamable(videoPath: string) {
@@ -50,6 +50,7 @@ export class VideoService {
       bucket_name: video.dataStore.bucket,
       video_id: video.dataStore?.objectName,
       video_name: video.dataStore?.fileName,
+      tags: video.tags || [],
     };
 
     return await lastValueFrom(this.$dataprep.createEmbeddings(videoData));
@@ -61,6 +62,7 @@ export class VideoService {
     videoData: VideoDTO,
   ): Promise<string> {
     Logger.log('Uploading video', videoFilePath, videoFileName, videoData);
+    const safeVideoFilePath = this.$validator.resolveSafeUploadPath(videoFilePath);
 
     const videoId = uuidv4();
 
@@ -70,7 +72,7 @@ export class VideoService {
     );
 
     try {
-      await this.$datastore.uploadFile(objectPath, videoFilePath);
+      await this.$datastore.uploadFile(objectPath, safeVideoFilePath);
     } catch (error) {
       Logger.error('Error uploading video file to object storage', error);
       throw new UnprocessableEntityException(
@@ -78,7 +80,7 @@ export class VideoService {
       );
     }
 
-    unlink(videoFilePath, (err) => {
+    unlink(safeVideoFilePath, (err) => {
       if (err) {
         Logger.error('Error deleting file', err);
       }
@@ -98,8 +100,11 @@ export class VideoService {
       url: objectPath,
     };
 
-    if (videoData.tagsArray) {
+    let tagsToAdd: string[] = [];
+
+    if (videoData.tagsArray && videoData.tagsArray.length > 0) {
       video.tags = videoData.tagsArray;
+      tagsToAdd = videoData.tagsArray;
     }
 
     if (videoData.name) {
@@ -108,6 +113,10 @@ export class VideoService {
 
     try {
       const videoDB = await this.$videoDb.create(video);
+      if (tagsToAdd.length > 0) {
+        Logger.log('Adding video tags', tagsToAdd);
+        await this.$tags.addTags(tagsToAdd);
+      }
       this.videoMap.set(video.videoId, videoDB);
     } catch (error) {
       Logger.error('Error saving video to database', error);

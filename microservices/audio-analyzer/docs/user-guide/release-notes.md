@@ -1,13 +1,7 @@
 # Release Notes
 
-## Current Release: 0.0.1
-**Release Date**: 2025-06-01
+This microservice supports features based on the requirements of the
+[Video Search and Summarization](https://docs.openedgeplatform.intel.com/dev/edge-ai-libraries/video-search-and-summarization/index.html)
+sample application. Refer to its release notes for details on this microservice.
 
-### Features
-- **Feature 1**:
-
-### Improvements
-- **Improvement 1**: 
-    - **Impact**:
-- **Improvement 2**: 
-    - **Impact**:
+The current release is version 1.3.1

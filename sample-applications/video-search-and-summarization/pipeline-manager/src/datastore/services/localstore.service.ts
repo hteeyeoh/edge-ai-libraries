@@ -1,6 +1,5 @@
 // Copyright (C) 2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
-
 import { Injectable } from '@nestjs/common';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 
@@ -49,8 +48,13 @@ export class LocalstoreService {
   }
 
   private createPath(filePath: string) {
-    if (!existsSync(filePath)) {
-      writeFileSync(filePath, '', { mode: 'w+' });
+    try {
+      writeFileSync(filePath, '', { flag: 'wx' });
+    } catch (error) {
+      const e = error as NodeJS.ErrnoException;
+      if (e.code !== 'EEXIST') {
+        throw error;
+      }
     }
   }
 

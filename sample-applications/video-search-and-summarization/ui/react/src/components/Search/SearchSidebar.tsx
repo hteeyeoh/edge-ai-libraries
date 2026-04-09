@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Intel Corporation
+// SPDX-License-Identifier: Apache-2.0
 import { IconButton } from '@carbon/react';
 import { Renew } from '@carbon/react/icons';
 import { FC } from 'react';
@@ -6,6 +8,7 @@ import styled from 'styled-components';
 import { useAppDispatch, useAppSelector } from '../../redux/store';
 import { SearchSidebarItem } from './SearchSidebarItem';
 import { SearchActions, SearchLoad, SearchSelector } from '../../redux/search/searchSlice';
+import { SearchQueryStatus } from '../../redux/search/search';
 
 const SidebarContainer = styled.aside<{ disabled: boolean }>`
   display: flex;
@@ -42,7 +45,7 @@ export const StyledIconButton = styled(IconButton)`
 `;
 
 export const SearchSidebar: FC = () => {
-  const { queries, selectedQueryId, unreads } = useAppSelector(SearchSelector);
+  const { queries, selectedQueryId, unreads, queriesInProgress } = useAppSelector(SearchSelector);
 
   const { t } = useTranslation();
 
@@ -52,7 +55,8 @@ export const SearchSidebar: FC = () => {
     dispatch(SearchActions.selectQuery(queryId));
   };
 
-  const sidebarList = queries.map((curr) => (
+  const filteredQueries = queries.filter((query) =>query.queryStatus !== SearchQueryStatus.ERROR && query.results && query.results.length > 0);
+  const sidebarList = filteredQueries.map((curr) => (
     <SearchSidebarItem
       item={curr}
       selected={selectedQueryId === curr.queryId}
@@ -66,14 +70,20 @@ export const SearchSidebar: FC = () => {
 
   return (
     <>
-      <SidebarContainer disabled={false}>
+      <SidebarContainer disabled={false} data-tour="previous-searches">
         <Navigation>
           {t('Queries')}
           <span className='spacer'></span>
-          <IconButton kind='ghost' label={t('Refetch')} onClick={() => dispatch(SearchLoad())} size='sm'>
+          <IconButton kind='ghost' label={t('Refetch')} autoAlign onClick={() => dispatch(SearchLoad())} size='sm'>
             <Renew />
           </IconButton>
         </Navigation>
+        {queriesInProgress.length > 0 && (
+          <Navigation>
+            <span className='spacer'></span>
+            <span>{t('AddingSearches', { count: queriesInProgress.length })}</span>
+          </Navigation>
+        )}
         <ScrollableContainer>{sidebarList}</ScrollableContainer>
       </SidebarContainer>
     </>

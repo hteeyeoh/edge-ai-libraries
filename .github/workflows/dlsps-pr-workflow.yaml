@@ -1,0 +1,65 @@
+name: "[DLSPS] PR workflow"
+run-name: "[DLSPS] PR  workflow (by @${{ github.actor }} via ${{ github.event_name }})"
+on:
+  push:
+    branches:
+      - 'main'
+    paths:
+      - 'microservices/dlstreamer-pipeline-server/configs/**'
+      - 'microservices/dlstreamer-pipeline-server/docker/**'
+      - 'microservices/dlstreamer-pipeline-server/helm/**'
+      - 'microservices/dlstreamer-pipeline-server/packages/**'
+      - 'microservices/dlstreamer-pipeline-server/plugins/**'
+      - 'microservices/dlstreamer-pipeline-server/resources/**'
+      - 'microservices/dlstreamer-pipeline-server/src/**'
+      - 'microservices/dlstreamer-pipeline-server/tests/**'
+      - 'microservices/dlstreamer-pipeline-server/user_scripts/**'
+      - 'microservices/dlstreamer-pipeline-server/utils/**'
+      - 'microservices/dlstreamer-pipeline-server/Dockerfile'
+      - 'microservices/dlstreamer-pipeline-server/unittests.Dockerfile'
+  pull_request:
+    paths:
+      - 'microservices/dlstreamer-pipeline-server/configs/**'
+      - 'microservices/dlstreamer-pipeline-server/docker/**'
+      - 'microservices/dlstreamer-pipeline-server/helm/**'
+      - 'microservices/dlstreamer-pipeline-server/packages/**'
+      - 'microservices/dlstreamer-pipeline-server/plugins/**'
+      - 'microservices/dlstreamer-pipeline-server/resources/**'
+      - 'microservices/dlstreamer-pipeline-server/src/**'
+      - 'microservices/dlstreamer-pipeline-server/tests/**'
+      - 'microservices/dlstreamer-pipeline-server/user_scripts/**'
+      - 'microservices/dlstreamer-pipeline-server/utils/**'
+      - 'microservices/dlstreamer-pipeline-server/Dockerfile'
+      - 'microservices/dlstreamer-pipeline-server/unittests.Dockerfile'
+  workflow_call:
+  workflow_dispatch:
+permissions: {}
+
+jobs:
+  # ----------------------------------------------------- SCANs -----------------------------------------------------
+  dlsps-coverity:
+    permissions:
+      contents: read
+      packages: write
+    name: "DLSPS SCAN: static C/C++ code analysis"
+    uses: ./.github/workflows/dlsps_coverity.yaml
+    secrets:
+      DLSPS_COVERITY_TOKEN: ${{ secrets.DLSPS_COVERITY_TOKEN }}
+      DLSPS_COVERITY_EMAIL: ${{ secrets.DLSPS_COVERITY_EMAIL }}
+      DLSPS_COVERITY_PROJECT: ${{ secrets.DLSPS_COVERITY_PROJECT }}
+
+  # ------------------------------------------------ BUILDS & TESTS -------------------------------------------------
+  dlsps-sanity-test:
+    permissions:
+      contents: read
+      packages: write
+    name: "DLSPS TEST: sanity tests"
+    uses: ./.github/workflows/dlsps_sanity_test.yaml
+
+  dlsps-build-scans-tests:
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: write
+    name: "DLSPS BUILD & SCAN & TEST"
+    uses: ./.github/workflows/dlsps-build-scans-pr-workflow.yaml

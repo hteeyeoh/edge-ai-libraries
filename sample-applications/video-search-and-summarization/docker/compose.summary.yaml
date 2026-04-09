@@ -12,6 +12,7 @@ services:
     depends_on:
       vlm-openvino-serving:
         condition: service_healthy
+        required: false  # ignored when vlm profile is inactive (e.g. ENABLE_VLLM=true)
       video-ingestion:
         condition: service_healthy
       rabbitmq-service:
@@ -37,6 +38,7 @@ services:
       VLM_CONCURRENT: ${PM_VLM_CONCURRENT}
       SUMMARIZATION_MAX_COMPLETION_TOKENS: ${PM_SUMMARIZATION_MAX_COMPLETION_TOKENS}
       CAPTIONING_MAX_COMPLETION_TOKENS: ${PM_CAPTIONING_MAX_COMPLETION_TOKENS}
+      MAX_CONTEXT_LENGTH: ${PM_LLM_MAX_CONTEXT_LENGTH}
       LLM_MODEL_API: ${LLM_MODEL_API}
       MULTI_FRAME_COUNT: ${PM_MULTI_FRAME_COUNT}
       AUDIO_HOST: ${AUDIO_ENDPOINT}
@@ -49,13 +51,15 @@ services:
       WORKERS: ${WORKERS:-1}
 
   vlm-openvino-serving:
+    profiles:
+      - vlm-ov
     image: ${REGISTRY:-}vlm-openvino-serving:${TAG:-latest}
     ipc: host
     ports:
       - "${VLM_HOST_PORT}:8000"
     environment:
       no_proxy: ${no_proxy},${MINIO_HOST},localhost
-      no_proxy_env: ${no_proxy},${MINIO_HOST}
+      no_proxy_env: ${no_proxy},${MINIO_HOST},localhost
       http_proxy: ${http_proxy}
       https_proxy: ${https_proxy}
       VLM_MODEL_NAME: ${VLM_MODEL_NAME}
@@ -68,13 +72,15 @@ services:
       VLM_LOG_LEVEL: ${VLM_LOG_LEVEL:-info}
       OPENVINO_LOG_LEVEL: ${VLM_OPENVINO_LOG_LEVEL:-1}
       VLM_ACCESS_LOG_FILE: ${VLM_ACCESS_LOG_FILE:-/dev/null}
+      VLM_TELEMETRY_PATH: ${VLM_TELEMETRY_PATH:-/opt/vlm_telemetry.jsonl}
+      VLM_TELEMETRY_MAX_RECORDS: ${VLM_TELEMETRY_MAX_RECORDS:-100}
     restart: unless-stopped
     devices:
-      - ${DRI_MOUNT_PATH}:/dev/dri
+      - ${DRI_MOUNT_PATH:-/dev/null}:/dev/dri
     group_add:
-      - ${USER_GROUP_ID-1000} 
-      - ${VIDEO_GROUP_ID-44}    
-      - ${RENDER_GROUP_ID-1002}
+      - ${USER_GROUP_ID:-1000} 
+      - ${VIDEO_GROUP_ID:-44}    
+      - ${RENDER_GROUP_ID:-1002}
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 15s
@@ -88,13 +94,17 @@ services:
       - vs_network
 
   ovms-service:
-    image: openvino/model_server:2025.1
+    image: openvino/model_server:2025.4.1
     profiles:
       - ovms
     environment:
       - no_proxy=${no_proxy},localhost
       - http_proxy=${http_proxy}
       - https_proxy=${https_proxy}
+    ulimits:
+      nofile:
+        soft: 16384
+        hard: 65536
     ports:
       - "${OVMS_HTTP_HOST_PORT}:80"
       - "${OVMS_GRPC_HOST_PORT}:81"
@@ -120,7 +130,7 @@ services:
     ports:
       - "${EVAM_PIPELINE_HOST_PORT}:8080"
     healthcheck:
-      test: ["CMD", "wget", "http://localhost:8080/pipelines", "-O", "/tmp/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/pipelines", "-o", "/dev/null"]
       interval: 60s
       timeout: 10s
       retries: 3
@@ -179,9 +189,8 @@ services:
     ports:
       - "${AUDIO_HOST_PORT}:8000"
     volumes:
-      - audio_analyzer_data:/models
       - audio_analyzer_data:/data
-      - ${DRI_MOUNT_PATH}:/dev/dri
+      - ${DRI_MOUNT_PATH:-/dev/null}:/dev/dri
     environment:
       - http_proxy
       - https_proxy
@@ -198,7 +207,7 @@ services:
       minio-service:
         condition: service_healthy
     devices:
-      - ${DRI_MOUNT_PATH}:/dev/dri
+      - ${DRI_MOUNT_PATH:-/dev/null}:/dev/dri
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
@@ -238,7 +247,7 @@ volumes:
   audio_analyzer_data:
     driver: local
   ov-models:
-    external: true
+    driver: local
   vol_evam_pipeline_root:
     driver: local
     driver_opts:

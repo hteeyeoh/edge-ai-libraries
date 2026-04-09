@@ -1,6 +1,5 @@
 // Copyright (C) 2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
-
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppConfigService } from './app-config.service';
 import { ConfigService } from '@nestjs/config';
@@ -53,6 +52,7 @@ describe('AppConfigService', () => {
                 'openai.usecase': 'default',
                 'openai.vlmCaptioning.frameOverlap': 3,
                 'openai.vlmCaptioning.multiFrame': 12,
+                'audio.host': 'http://localhost:8080',
               };
               return config[key];
             }),

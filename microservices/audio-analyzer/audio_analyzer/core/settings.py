@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Audio Analyzer Service"
     API_VER: str = "1.0.0"
     API_DESCRIPTION: str = "API for intelligent audio processing including speech transcription and audio event detection" 
-    DEBUG: bool = False  # Debug flag to run API server with DEBUG logs. Used in Development only.
+    FASTAPI_ENV: str = "development"  # Environment for FastAPI (development or production)
 
     # API Health check configuration
     API_STATUS: str = "healthy"
@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     AUDIO_DIR: Path = "/tmp/audio_analyzer/audio"  # Temporary directory for saving audio stream extracted from video files
     
     # Storage backend configuration
-    STORAGE_BACKEND: StorageBackend = StorageBackend.FILESYSTEM 
+    STORAGE_BACKEND: StorageBackend = StorageBackend.FILESYSTEM
     
     # MinIO configuration
     MINIO_ENDPOINT: str = "localhost:9000"
@@ -98,6 +98,12 @@ class Settings(BaseSettings):
     
     @computed_field
     @property
+    def DEBUG(self) -> bool:
+        """Determine if the application is running in debug mode based on environment"""
+        return self.FASTAPI_ENV.lower() == "development"
+    
+    @computed_field
+    @property
     def AUDIO_FORMAT_PARAMS(self) -> dict:
         """Get audio format parameters based on configured settings"""
         return {
@@ -136,7 +142,7 @@ class Settings(BaseSettings):
     
     @field_validator("DEFAULT_WHISPER_MODEL", mode="before")
     @classmethod
-    def validate_default_whisper_model(cls, v: Any, info) -> WhisperModel:
+    def validate_default_whisper_model(cls, v: Any, info) -> WhisperModel | None:
         """ Validate the default whisper model against the list of enabled models.
         If no default model is provided, return the Base model if available or first enabled model.
         """
@@ -152,9 +158,10 @@ class Settings(BaseSettings):
                     )
                 return WhisperModel(v)
             
+            fallback_model = enabled_models[0] if len(enabled_models) > 0 else None
             # If no default model is provided, return the small model if available or first enabled model
-            return WhisperModel.SMALL_EN if (WhisperModel.SMALL_EN in enabled_models) else enabled_models[0]
-            
+            return WhisperModel.SMALL_EN if (WhisperModel.SMALL_EN in enabled_models) else fallback_model
+
         except ValueError as e:
             raise e
 

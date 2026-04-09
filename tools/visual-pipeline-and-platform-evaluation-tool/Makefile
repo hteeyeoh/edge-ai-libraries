@@ -6,11 +6,10 @@ SHELL := bash -eu -o pipefail
 # default goal to show help
 .DEFAULT_GOAL := help
 .PHONY: all lint build mdlint ruff fix-linter format pyright run build-dev run-dev test \
-	shell shell-vippet shell-models shell-collector shell-videogenerator stop clean help \
-	public_models_choice reset_public_models_choice build-videogenerator docker-build
-
-# Code Versions
-VERSION := v1.2
+	shell shell-vippet shell-models shell-model-download shell-collector shell-videogenerator stop clean clean-output-videos help \
+	build-videogenerator build-models build-onvif-discovery docker-build env-setup \
+	install-models-once install-models-force install-models-all \
+	test-smoke test-full
 
 # Project Variables
 PROJECT_NAME := vippet
@@ -23,23 +22,18 @@ DEV_COMPOSE_FILE := compose.dev.yml
 # Python venv Target
 VENV_DIR := .venv
 
-PUBLIC_MODELS_ENV := .public_models_env
-
-# Placeholder to prevent warnings about missing variables.
-# This value is overridden by setup_env.sh in relevant targets.
-export RENDER_GROUP_ID := 1000
-
-$(VENV_DIR): requirements.txt ## Create Python venv
+$(VENV_DIR): $(PROJECT_NAME)/requirements.txt ## Create Python venv
 	python3 -m venv $@ ;\
 	set +u; . ./$@/bin/activate; set -u ;\
 	python -m pip install --upgrade pip ;\
-	python -m pip install -r requirements-dev.txt
+	python -m pip install -r $(PROJECT_NAME)/requirements-dev.txt ;\
+	python -m pip install -r video_generator/requirements.txt # needed for pyright checks
 
 all: lint build run test ## Run lint, build, run and test
 
 lint: $(VENV_DIR) mdlint ruff pyright ## Run all linters
 
-MD_FILES := $(shell find . -type f \( -name '*.md' \) -not -path './.*' -print )
+MD_FILES := $(shell find . -type f \( -name '*.md' \) -not -path './.*' -not -path './shared/*' -print )
 mdlint: ## Lint MD files
 # download tool from https://github.com/igorshubovych/markdownlint-cli
 	markdownlint --version
@@ -48,86 +42,106 @@ mdlint: ## Lint MD files
 ruff: $(VENV_DIR) ## Run ruff linter
 	set +u; . ./$</bin/activate; set -u ;\
 	ruff --version ;\
-	ruff check ;\
-	ruff format --check
+	# Exclude shared/ — runtime-mounted volume, not source code ;\
+	ruff check --exclude shared/ ;\
+	ruff format --check --exclude shared/
 
 fix-linter: $(VENV_DIR) ## Fix linter issues using ruff
 	set +u; . ./$</bin/activate; set -u ;\
-	ruff check --fix
+	# Exclude shared/ — runtime-mounted volume, not source code ;\
+	ruff check --fix --exclude shared/
 
 format: $(VENV_DIR) ## Format code using ruff
 	set +u; . ./$</bin/activate; set -u ;\
-	ruff format
+	# Exclude shared/ — runtime-mounted volume, not source code ;\
+	ruff format --exclude shared/
 
 pyright: $(VENV_DIR) ## Run pyright type checker
 	set +u; . ./$</bin/activate; set -u ;\
 	pyright --version ;\
 	pyright .
 
-check-device-type:
-	@if [ -z "$(DEVICE_TYPE)" ]; then \
-		echo "Error: DEVICE_TYPE is not set. Use 'make <target> DEVICE_TYPE=<GPU/CPU/NPU>'"; \
-		exit 1; \
-	fi; \
+generate_openapi: $(VENV_DIR) ## Generate OpenAPI schema file
+	set +u; . ./$</bin/activate; set -u ;\
+	cd $(PROJECT_NAME) ;\
+	PYTHONPATH=. SUPPORTED_MODELS_FILE=../shared/models/supported_models.yaml INPUT_VIDEO_DIR=../shared/videos/input python ../generate_openapi.py
 
-build: check-device-type $(VENV_DIR) ## Build core images (vippet-app, vippet-collector)
-	source setup_env.sh -d $(DEVICE_TYPE) && \
-	DOCKER_TAG=$(VERSION) docker compose build
+env-setup: ## Environment setup target: always run before build/run targets that need .env and shared dirs
+	mkdir -p shared/collector-signals && chmod o+w shared/collector-signals
+	mkdir -p shared/models/output && chmod o+w shared/models/output
+	mkdir -p shared/model-download/venv && chmod o+w shared/model-download/venv
+	mkdir -p shared/model-download/cache && chmod o+w shared/model-download/cache
+	mkdir -p shared/videos/input && chmod o+w shared/videos/input
+	mkdir -p shared/videos/output && chmod o+w shared/videos/output
+	mkdir -p shared/videos/video-generator && chmod o+w shared/videos/video-generator
+	./setup_env.sh
 
-build-dev: check-device-type $(VENV_DIR) ## Build core dev images (vippet-app, vippet-collector)
-	source setup_env.sh -d $(DEVICE_TYPE) && \
-	DOCKER_TAG=$(VERSION) docker compose -f $(COMPOSE_FILE) -f $(DEV_COMPOSE_FILE) build
+build: env-setup ## Build core images (vippet-app, vippet-collector, vippet-ui)
+	. .env && docker compose -f $(COMPOSE_FILE) -f compose.$$COMPOSE_PROFILES.yml build
 
-build-videogenerator: ## Build videogenerator image
-	DOCKER_TAG=$(VERSION) docker compose build videogenerator
+build-dev: env-setup ## Build core dev images (vippet-app, vippet-collector, vippet-ui)
+	. .env && docker compose -f $(COMPOSE_FILE) -f compose.$$COMPOSE_PROFILES.yml -f $(DEV_COMPOSE_FILE) build
 
-docker-build: ## Build all images
-	$(MAKE) build DEVICE_TYPE=$(or $(DEVICE_TYPE),CPU)
-	$(MAKE) build-videogenerator
+build-videogenerator: env-setup ## Build videogenerator image
+	. .env && docker compose -f $(COMPOSE_FILE) -f compose.$$COMPOSE_PROFILES.yml build videogenerator
 
-public_models_choice: ## Ask if public models shall be downloaded
-	@if [ -f $(PUBLIC_MODELS_ENV) ]; then \
-		printf "Choice on downloading public models was already made, skipping prompt. "; \
-		printf "To reset choice run \`make reset_public_models_choice\`.\n"; \
-		exit 0; \
-	fi; \
-	read -p "Do you want to download public models? (y/n): " yn; \
-	case $$yn in \
-		y|Y|[yY][eE][sS]) DOWNLOAD_PUBLIC_MODELS=true ;; \
-		*) DOWNLOAD_PUBLIC_MODELS=false ;; \
-	esac; \
-	echo "DOWNLOAD_PUBLIC_MODELS set to $$DOWNLOAD_PUBLIC_MODELS" ;\
-	echo "DOWNLOAD_PUBLIC_MODELS=$$DOWNLOAD_PUBLIC_MODELS" > $(PUBLIC_MODELS_ENV)
+build-models: env-setup ## Build model image
+	. .env && docker compose -f $(COMPOSE_FILE) -f compose.$$COMPOSE_PROFILES.yml build models
 
-reset_public_models_choice: ## Reset choice on public models download
-	rm -rf $(PUBLIC_MODELS_ENV)
+build-onvif-discovery: env-setup ## Build onvif discovery image
+	. .env && docker compose -f $(COMPOSE_FILE) -f compose.$$COMPOSE_PROFILES.yml build onvif-discovery
 
-run: check-device-type public_models_choice ## Run the docker compose services
-	source setup_env.sh -d $(DEVICE_TYPE) && \
-	mkdir -p models && chmod o+w models && \
-	DOCKER_TAG=$(VERSION) docker compose up -d
+docker-build: build build-videogenerator build-models ## Build all images
 
-run-dev: check-device-type public_models_choice ## Run the docker compose services for development
-	source setup_env.sh -d $(DEVICE_TYPE) && \
-	mkdir -p models && chmod o+w models && \
-	DOCKER_TAG=$(VERSION) docker compose -f $(COMPOSE_FILE) -f $(DEV_COMPOSE_FILE) up -d
+run: env-setup install-models-once ## Run the docker compose services
+	. .env && docker compose -f $(COMPOSE_FILE) -f compose.$$COMPOSE_PROFILES.yml up -d
 
-test: $(VENV_DIR) ## Run tests and generate coverage report
-	# Run tests using the vippet-cpu container (tests are device agnostic)
-	DOCKER_TAG=$(VERSION) docker compose run --rm --no-deps --volume $(PROJECT_DIR):/home/dlstreamer/vippet \
-		vippet-cpu bash -c "\
-		python -m coverage run --source=./ --data-file=/tmp/.vippet-coverage -m unittest discover -v -s ./tests -p '*_test.py' && \
+run-videogenerator: env-setup build-videogenerator ## Run only the videogenerator service
+	. .env && docker compose -f $(COMPOSE_FILE) -f compose.$$COMPOSE_PROFILES.yml up -d videogenerator
+
+run-dev: env-setup install-models-once ## Run the docker compose services for development
+	. .env && docker compose -f $(COMPOSE_FILE) -f compose.$$COMPOSE_PROFILES.yml -f $(DEV_COMPOSE_FILE) up -d
+
+test: env-setup ## Run unit tests and generate coverage report
+    # Run tests using the cpu profile (tests are device agnostic)
+    # Override DOCKER_TAG with '-test' suffix only for this docker compose run
+	. .env && TARGET=test DOCKER_TAG="test" docker compose -f $(COMPOSE_FILE) -f compose.$$COMPOSE_PROFILES.yml run \
+	--build --rm --no-deps --volume $(PROJECT_DIR):/home/dlstreamer/vippet vippet bash -c "\
+		cd $(PROJECT_NAME) && \
+		INPUT_VIDEO_DIR=/tmp \
+		OUTPUT_VIDEO_DIR=/tmp \
+		METADATA_DIR=/tmp \
+		python -m coverage run --source=./ --data-file=/tmp/.vippet-coverage -m unittest discover -v -s ./tests/unit -p '*_test.py' && \
 		python -m coverage report --data-file=/tmp/.vippet-coverage --omit=*/config-3.py,*/config.py,*_test.py"
 
-shell: ## Open shell in specified container (i.e. make shell SERVICE=vippet-gpu)
+test-smoke: $(VENV_DIR) ## Run smoke functional tests
+	set +u; . ./$</bin/activate; set -u ;\
+	python -m pytest --log-cli-level=INFO -m smoke vippet/tests/functional/
+
+test-full: $(VENV_DIR) ## Run full functional tests
+	set +u; . ./$</bin/activate; set -u ;\
+	python -m pytest --log-cli-level=INFO vippet/tests/functional/
+
+install-models-once: env-setup ## Handle models download and installation (once)
+	. .env && MODEL_INSTALLATION=once docker compose -f $(COMPOSE_FILE) -f compose.$$COMPOSE_PROFILES.yml run --rm -it models
+
+install-models-force: env-setup ## Handle models download and installation (force)
+	. .env && MODEL_INSTALLATION=force docker compose -f $(COMPOSE_FILE) -f compose.$$COMPOSE_PROFILES.yml run --rm -it models
+
+install-models-all: env-setup ## Install all models automatically (no dialog)
+	. .env && MODEL_INSTALLATION=all docker compose -f $(COMPOSE_FILE) -f compose.$$COMPOSE_PROFILES.yml run --rm -it models
+
+shell: env-setup ## Open shell in specified container (i.e. make shell SERVICE=vippet)
 	docker exec -it $(SERVICE) bash
 
-shell-vippet: ## Open shell in vippet-* container
-	@VIPPET_SERVICE=$$(DOCKER_TAG=$(VERSION) docker compose ps --services | grep "^vippet-" | head -n 1); \
-	$(MAKE) shell SERVICE=$$VIPPET_SERVICE;
+shell-vippet: ## Open shell in vippet container
+	$(MAKE) shell SERVICE=vippet
 
 shell-models: ## Open shell in models container
 	$(MAKE) shell SERVICE=models
+
+shell-model-download: ## Open shell in model-download container
+	$(MAKE) shell SERVICE=model-download
 
 shell-collector: ## Open shell in collector container
 	$(MAKE) shell SERVICE=collector
@@ -136,11 +150,13 @@ shell-videogenerator: ## Open shell in videogenerator container
 	$(MAKE) shell SERVICE=videogenerator
 
 stop: ## Stop the docker compose services
-	@VIPPET_SERVICE=$$(DOCKER_TAG=$(VERSION) docker compose ps --services | grep "^vippet-" | head -n 1 || echo ""); \
-	DOCKER_TAG=$(VERSION) docker compose down models collector videogenerator $$VIPPET_SERVICE
+	docker compose down models model-download collector videogenerator mediamtx vippet-ui vippet onvif-discovery
 
 clean: ## Clean all build artifacts
-	rm -rf .collector-signals/ models/ videos/
+	rm -rf shared/collector-signals shared/models/output/ shared/model-download/ shared/onvif/onvif_cameras.json shared/videos/input shared/videos/output shared/videos/video-generator
+
+clean-output-videos: ## Clean only output videos
+	rm -rf shared/videos/output/*
 
 help: ## Print help for each target
 	@echo ViPPET make targets

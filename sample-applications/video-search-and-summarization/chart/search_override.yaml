@@ -7,7 +7,16 @@ vdmsvectordb:
 videosearch:
   enabled: true
 
-videoSummaryManager:
+global:
+  # vdmsIndexName is the DB Index or DB Collection name used by VDMS Vector DB.
+  vdmsIndexName: "video_frame_embeddings"
+
+  # sharedPvcName is the PVC shared by VDMS Dataprep and Multimodel-Embedding-MS subcharts.
+  sharedPvcName: "vss-shared-pvc"
+  env:
+    EMBEDDING_MODEL_NAME: ""
+
+pipelinemanager:
   env:
     SUMMARY_FEATURE: "FEATURE_OFF"
     SEARCH_FEATURE: "FEATURE_ON"

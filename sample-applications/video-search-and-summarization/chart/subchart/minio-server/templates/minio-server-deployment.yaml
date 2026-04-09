@@ -1,31 +1,40 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "minioServer.fullname" . }}
+  name: {{ include "minioserver.fullname" . }}
   labels:
-    app: {{ include "minioServer.name" . }}
+    app: {{ include "minioserver.name" . }}
 spec:
-  replicas: {{ .Values.minioServer.replicaCount | default 1 }}
+  replicas: {{ .Values.replicaCount | default 1 }}
   selector:
     matchLabels:
-      app: {{ .Values.minioServer.name }}
+      app: {{ .Values.name }}
   template:
     metadata:
       labels:
-        app: {{ .Values.minioServer.name }}
+        app: {{ .Values.name }}
     spec:
+      {{- with .Values.securityContext }}
+      securityContext:
+        {{- toYaml . | nindent 10 }}
+      {{- end }}
       containers:
-        - name: {{ include "minioServer.name" . }}
-          image: "{{ .Values.minioServer.image.repository }}:{{ .Values.minioServer.image.tag }}"
-          imagePullPolicy: {{ .Values.minioServer.image.pullPolicy }}
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
-            - name: api
-              containerPort: {{ .Values.minioServer.service.port}}
-            - name: console
-              containerPort: {{ .Values.minioServer.service.consolePort }}
+            - name: {{ .Values.containerApiPortName }}
+              containerPort: 9000
+            - name: {{ .Values.containerConsolePortName }}
+              containerPort: 9001
           volumeMounts:
-            - mountPath: /mnt/miniodata
+            - mountPath: /data
               name: minio-data
+              subPath: miniodata
           env:
             - name: MINIO_ROOT_USER
               value: {{ .Values.global.env.MINIO_ROOT_USER }}
@@ -36,11 +45,19 @@ spec:
             - name: HTTPS_PROXY
               value: {{ .Values.global.proxy.https_proxy }}
             - name: no_proxy
-              value: "{{ .Values.global.proxy.no_proxy }},localhost,127.0.0.1,audioanalyzer,vlm-inference-microservice,videosummarybackend,videoingestion,minio-server,postgresql,video-summary-nginx,rabbitmq,multimodal-embedding-ms,vdms-dataprep,vdms-vectordb,videosearch,.svc.cluster.local"
+              value: "{{ .Values.global.proxy.no_proxy }},localhost,127.0.0.1,audioanalyzer,vlm-inference-microservice,pipelinemanager,videoingestion,minio-server,postgresql,video-summary-nginx,rabbitmq,multimodal-embedding-ms,vdms-dataprep,vdms-vectordb,videosearch,.svc.cluster.local"
             - name: NO_PROXY
-              value: "{{ .Values.global.proxy.no_proxy }},localhost,127.0.0.1,audioanalyzer,vlm-inference-microservice,videosummarybackend,videoingestion,minio-server,postgresql,video-summary-nginx,rabbitmq,multimodal-embedding-ms,vdms-dataprep,vdms-vectordb,videosearch,.svc.cluster.local"
+              value: "{{ .Values.global.proxy.no_proxy }},localhost,127.0.0.1,audioanalyzer,vlm-inference-microservice,pipelinemanager,videoingestion,minio-server,postgresql,video-summary-nginx,rabbitmq,multimodal-embedding-ms,vdms-dataprep,vdms-vectordb,videosearch,.svc.cluster.local"
           command: ["minio","server", "/data", "--address", ":9000", "--console-address", ":9001"]
       volumes:
         - name: minio-data
+          {{- if .Values.global.usePvc }}
           persistentVolumeClaim:
-            claimName: {{ .Values.minioServer.volumeMounts.pvcName }}
+            claimName: {{ include "minioserver.fullname" . }}-pvc
+          {{- else if .Values.global.volumeHostPath }}
+          hostPath:
+            path: {{ .Values.global.volumeHostPath }}
+            type: DirectoryOrCreate
+          {{- else }}
+          emptyDir: {}
+          {{- end }}

@@ -1,4 +1,13 @@
 global:
+  # Set this value to hostPath where we want to mount a volume (Used in single node cluster or standalone sub-chart installation).
+  volumeHostPath: ""
+
+  # usePvc should be set to true to use a PVC for persisting models, cache and other files.
+  usePvc: false
+
+  # keepPvc should be set to true to retain the PVC after uninstalling the chart.
+  keepPvc: false
+
   proxy:
     no_proxy:
     http_proxy:
@@ -7,22 +16,27 @@ global:
     MINIO_ROOT_USER:
     MINIO_ROOT_PASSWORD:
 
-minioServer:
-  name: minio-server
-  image:
-    repository: minio/minio
-    tag: RELEASE.2025-02-07T23-21-09Z-cpuv1
-    pullPolicy: IfNotPresent
-  service:
-    type: ClusterIP
-    # API port configuration
-    port: 9000
-    targetPort: 9000
-    # Console port configuration
-    consolePort: 9001
-    consoleTargetPort: 9001
-  volumeMounts:
-    pvcName: minio-pvc
-    egai_minio_pvc:
-      size: 20Gi
-      accessMode: ReadWriteOnce
+name: minio-server
+
+# claimSize is the storage size claimed by PVC if usePvc is set to true.
+# claimSize should be set based on the size of models and files expected to be stored.
+claimSize: ""
+
+image:
+  repository: chainguard/minio@sha256
+  tag: cb84dfa704c648c4b14858aa288576bb1cf756a9b326112a0934db00e87d0bb8
+  pullPolicy: IfNotPresent
+
+containerApiPortName: api-port  # Optional name to refer apiPort
+containerConsolePortName: console-port  # Optional name to refer consolePort
+service:
+  type: ClusterIP
+  consolePort: 9001  # Port on which service listens for incoming connection for Console application
+  apiPort: 9000  # Port on which service listens for incoming connection for API application
+
+securityContext:
+  fsGroup: 1000
+  runAsUser: 1000
+  runAsGroup: 1000
+
+resources: {}

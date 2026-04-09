@@ -2,6 +2,33 @@
 
 ## Current Release
 
+**Version**: 1.3.2 \
+**Release Date**: WW09 2026
+
+-  Upgrade Ollama binary to latest version 0.17.0.
+-  Upgrade GPU drivers for PTL support.
+-  Dependency Upgrades. Upgraded application dependencies flagged by Dependabot for known vulnerabilities.
+
+## Previous Releases
+
+**Version**: 1.3.1 \
+**Release Date**: WW48 2025
+
+- Helm Chart Update. Resolved issues caused by deprecated schema and fields in Helm charts following the recent Helm binary release. The chart has been updated to align with the latest Helm specifications, ensuring compatibility and preventing deployment failures.
+- Dependency Upgrades. Upgraded application dependencies flagged by Dependabot for known vulnerabilities.
+
+## Earlier releases
+
+**Version**: 1.3.0 \
+**Release Date**: WW42 2025
+
+- Ollama Integration with Expanded Model Support. Enabling support for a broader range of models beyond the previously supported OpenVINO toolkit. This allows users to seamlessly switch between OpenVINO toolkit and Ollama-supported models.
+- Package Vulnerability Fixes. Upgraded dependencies to latest versions.
+
+## Known Issues/Behavior (Consolidated):
+
+- Validation on the latest version of Edge Manageability Framework has not been done. Hence, Edge Manageability Framework should be considered as not supported. - Open
+
 **Version**: 1.2.2 \
 **Release Date**: WW32 2025
 
@@ -10,16 +37,10 @@
 - Renamed `stream_log/` endpoint to `chat/`, reflecting its functionality more accurately.
 - Functional on EMT 3.0.
 
-## Known Issues/Behavior (Consolidated):
-- Validation on the latest version of EMF has not been done. Hence, EMF should be considered as not supported. - Open
-- Not validated on EMT edge node - Closed
-
-## Previous Releases
-
 **Version**: 1.2.1 \
 **Release Date**: WW27 2025
 
-- Image Optimization for ChatQnA Core Backend. Reducing image sizes, which will lead to faster processing times and reduced bandwidth usage.
+- Image Optimization for the Chat Q&A Core Backend. Reducing image sizes, which will lead to faster processing times and reduced bandwidth usage.
 - Security Vulnerabilities Fix for Dependency Packages.
 - Update in Setup Scripts for default model download path in the backend.
 - Bug fixes.
@@ -33,8 +54,6 @@
 - Docker images for this release:
   - CPU-only support: intel/chatqna:core_1.2.0
   - GPU-enabled support: intel/chatqna:core_gpu_1.2.0
-
-## Earlier releases
 
 **Version**: 1.1.2 \
 **Release Date**: WW16 2025
@@ -59,4 +78,3 @@
 ## Known limitations
 
 - The load time for the application is ~10mins during the first run as the models needs to be downloaded and converted to OpenVINO IR format. Subsequent run with the same model configuration will not have this overhead. However, if the model configuration is changed, it will lead to the download and convert requirement resulting in the load time limitation.
-

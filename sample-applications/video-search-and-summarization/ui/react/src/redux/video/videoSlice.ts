@@ -1,12 +1,12 @@
 // Copyright (C) 2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
-
 import { createAsyncThunk, createSelector, createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { VideosRO, VideosState } from './video';
 import { RootState } from '../store';
 import axios from 'axios';
 import { APP_URL, ASSETS_ENDPOINT } from '../../config';
 import { StateActionStatus } from '../summary/summary';
+import { resolveVideoUrl } from './videoUrl';
 
 const initialState: VideosState = {
   videos: [],
@@ -53,19 +53,13 @@ export const videosLoad = createAsyncThunk('videos/load', async () => {
 const selectVideoState = (state: RootState) => state.videos;
 
 export const videosSelector = createSelector([selectVideoState], (videosState) => ({
+  videos: videosState.videos,
   getVideo: (videoId: string) => {
     return videosState.videos.find((video) => video.videoId === videoId);
   },
   getVideoUrl: (videoId: string) => {
     const video = videosState.videos.find((video) => video.videoId === videoId);
-
-    console.log(video);
-
-    if (video?.dataStore) {
-      return `${ASSETS_ENDPOINT}/${video.dataStore.bucket}/${video.url}`;
-    }
-
-    return null;
+    return resolveVideoUrl(video, ASSETS_ENDPOINT);
   },
 }));
 

@@ -1,6 +1,5 @@
 // Copyright (C) 2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
-
 import { Test, TestingModule } from '@nestjs/testing';
 import { TemplateService } from './template.service';
 import {
@@ -215,8 +214,8 @@ describe('TemplateService', () => {
 
   describe('getVideoTemplate', () => {
     it('should be defined but return undefined (placeholder method)', () => {
-      const result = service.getVideoTemplate();
-      expect(result).toBeUndefined();
+    const result = service.getTemplate('defaultFrames');
+    expect(result).toBe('MockedDefaultFramesTemplate');
     });
   });
 });

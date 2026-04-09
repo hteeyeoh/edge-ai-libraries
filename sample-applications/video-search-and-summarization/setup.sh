@@ -14,17 +14,30 @@ export CONFIG_DIR=${PWD}/config
 export NGINX_CONFIG=${CONFIG_DIR}/nginx.conf
 export RABBITMQ_CONFIG=${CONFIG_DIR}/rmq.conf
 
+# Function to stop Docker containers
+stop_containers() {
+    echo -e "${YELLOW}Bringing down the Docker containers... ${NC}"
+    docker compose -f docker/compose.base.yaml -f docker/compose.summary.yaml -f docker/compose.vllm.yaml -f docker/compose.search.yaml -f docker/compose.telemetry.yaml --profile ovms --profile vlm-ov --profile vllm down
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}ERROR: Failed to stop and remove containers.${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}All containers were successfully stopped and removed. ${NC}"
+    return 0
+}
+
 # Setting command usage and invalid arguments handling before the actual setup starts
 if [ "$#" -eq 0 ] ||  ([ "$#" -eq 1 ] && [ "$1" = "--help" ]); then
     # If no valid argument is passed, print usage information
     echo -e "-----------------------------------------------------------------"
-    echo -e  "${YELLOW}USAGE: ${GREEN}source setup.sh ${BLUE}[--setenv | --down | --help | --summary ${GREEN}[config]${BLUE} | --search ${GREEN}[config]${BLUE} | --all ${GREEN}[config]${BLUE}]"
+    echo -e  "${YELLOW}USAGE: ${GREEN}source setup.sh ${BLUE}[--setenv | --down | --clean-data | --help | --summary ${GREEN}[config]${BLUE} | --search ${GREEN}[config]${BLUE} | --all ${GREEN}[config]${BLUE}]"
     echo -e  "${YELLOW}"
     echo -e  "  --setenv:     Set environment variables without starting any containers"
     echo -e  "  --summary:    Configure and bring up Video Summarization application"
     echo -e  "  --search:     Configure and bring up Video Search application"
     echo -e  "  --all:        Configure and bring up both Video Summarization and Video Search applications"
     echo -e  "  --down:       Bring down all the docker containers for the application which was brought up."
+    echo -e  "  --clean-data: Bring down all the docker containers and remove all docker volumes for the user data."
     echo -e  "  --help:       Show this help message"
     echo -e  "  config:       Optional argument (only works with --summary, --search, or --all) to print the final"
     echo -e  "                compose configuration with all variables resolved without starting containers${NC}"
@@ -36,7 +49,7 @@ elif [ "$#" -gt 2 ]; then
     echo -e "${YELLOW}Use --help for usage information${NC}"
     return 1
 
-elif [ "$1" != "--help" ] && [ "$1" != "--summary" ] && [ "$1" != "--all" ] && [ "$1" != "--search" ] && [ "$1" != "--setenv" ] && [ "$1" != "--down" ]; then
+elif [ "$1" != "--help" ] && [ "$1" != "--summary" ] && [ "$1" != "--all" ] && [ "$1" != "--search" ] && [ "$1" != "--setenv" ] && [ "$1" != "--down" ] && [ "$1" != "--clean-data" ]; then
     # Default case for unrecognized first option
     echo -e "${RED}Unknown option: $1 ${NC}"
     echo -e "${YELLOW}Use --help for usage information${NC}"
@@ -57,12 +70,29 @@ elif [ "$#" -eq 2 ] && [ "$2" = "config" ] && [ "$1" != "--summary" ] && [ "$1" 
 elif [ "$1" = "--down" ]; then
     # If --down is passed, bring down the Docker containers
     echo -e "${YELLOW}Bringing down the Docker containers... ${NC}"
-    docker compose -f docker/compose.base.yaml -f docker/compose.summary.yaml -f docker/compose.search.yaml --profile ovms down
+    stop_containers
+    return $?
+
+elif [ "$1" = "--clean-data" ]; then
+    # If --clean-data is passed, bring down the Docker containers and remove volumes
+    stop_containers
     if [ $? -ne 0 ]; then
         echo -e "${RED}ERROR: Failed to stop and remove containers.${NC}"
         return 1
-    fi
+    fi    
+
     echo -e "${GREEN}All containers were successfully stopped and removed. ${NC}"
+    echo -e "${YELLOW}Removing Docker volumes created by the application... ${NC}"
+
+    # Remove volumes 
+    docker volume rm docker_minio_data docker_pg_data docker_vdms-db docker_audio_analyzer_data docker_data-prep docker_collector_signals 2>/dev/null || true
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}All volumes were successfully removed. ${NC}"
+    else
+        echo -e "${YELLOW}Note: Some volumes may not have existed or were already removed. ${NC}"
+    fi
+    echo -e "${GREEN}Clean operation completed successfully! ${NC}"
     return 0
 fi
 
@@ -94,8 +124,22 @@ export WORKERS=${WORKERS:-6}
 export VLM_LOG_LEVEL=${VLM_LOG_LEVEL:-info}
 export VLM_MAX_COMPLETION_TOKENS=${VLM_MAX_COMPLETION_TOKENS}
 export VLM_ACCESS_LOG_FILE=${VLM_ACCESS_LOG_FILE:-/dev/null}
+export VLM_TELEMETRY_PATH=${VLM_TELEMETRY_PATH:-/opt/vlm_telemetry.jsonl}
+
+if [ -z "$VLM_TELEMETRY_MAX_RECORDS" ]; then
+    export VLM_TELEMETRY_MAX_RECORDS=100
+elif ! [[ "$VLM_TELEMETRY_MAX_RECORDS" =~ ^[0-9]+$ ]] || [ "$VLM_TELEMETRY_MAX_RECORDS" -le 0 ]; then
+    echo -e "[vlm-openvino-serving] ${YELLOW}Invalid VLM_TELEMETRY_MAX_RECORDS: ${VLM_TELEMETRY_MAX_RECORDS}. Using default 100.${NC}"
+    export VLM_TELEMETRY_MAX_RECORDS=100
+fi
+
+export VLM_TELEMETRY_MAX_RECORDS=$VLM_TELEMETRY_MAX_RECORDS
 export VLM_HOST=vlm-openvino-serving
 export VLM_ENDPOINT=http://${VLM_HOST}:8000/v1
+export ENABLE_VLLM=${ENABLE_VLLM:-false}
+export VLLM_HOST=vllm-cpu-service
+export VLLM_HOST_PORT=${VLLM_HOST_PORT:-8200}
+export VLLM_ENDPOINT=http://${VLLM_HOST}:8000/v1
 export USER_ID=$(id -u)
 export USER_GROUP_ID=$(id -g)
 export VIDEO_GROUP_ID=$(getent group video | awk -F: '{printf "%s\n", $3}')
@@ -131,11 +175,11 @@ esac
 # If not set, the default configuration will be: {"PERFORMANCE_HINT": "LATENCY"}
 if [ -n "$OV_CONFIG" ]; then
     export OV_CONFIG=$OV_CONFIG
-    echo -e "${GREEN}Using custom OpenVINO configuration: ${YELLOW}$OV_CONFIG${NC}"
+    echo -e "[vlm-openvino-serving] ${GREEN}Using custom OpenVINO configuration: ${YELLOW}$OV_CONFIG${NC}"
 else
     unset OV_CONFIG
     # Default configuration will be handled by the VLM service
-    echo -e "${GREEN}Using default OpenVINO configuration: ${YELLOW}{\"PERFORMANCE_HINT\": \"LATENCY\"}${NC}"
+    echo -e "[vlm-openvino-serving] ${GREEN}Using default OpenVINO configuration: ${YELLOW}{\"PERFORMANCE_HINT\": \"LATENCY\"}${NC}"
 fi
 
 # env for pipeline-manager
@@ -143,9 +187,14 @@ export PM_HOST_PORT=3001
 export PM_HOST=pipeline-manager
 export PM_SUMMARIZATION_MAX_COMPLETION_TOKENS=4000
 export PM_CAPTIONING_MAX_COMPLETION_TOKENS=1024
+export PM_LLM_MAX_CONTEXT_LENGTH=${PM_LLM_MAX_CONTEXT_LENGTH:-90000}
 export PM_LLM_CONCURRENT=2
 export PM_VLM_CONCURRENT=4
-export PM_MULTI_FRAME_COUNT=12
+PM_MULTI_FRAME_COUNT_DEFAULTED=false
+if [[ -z "${PM_MULTI_FRAME_COUNT+x}" ]]; then
+    export PM_MULTI_FRAME_COUNT=12
+    PM_MULTI_FRAME_COUNT_DEFAULTED=true
+fi
 export PM_MINIO_BUCKET=video-summary
 
 # env for ovms-service
@@ -192,7 +241,6 @@ export MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD} # Set this in your shell befor
 
 # env for vdms-vector-db
 export VDMS_VDB_HOST_PORT=55555
-export VDMS_BUCKET=vdms-bucket
 export VDMS_VDB_HOST=vdms-vector-db
 
 # env for vdms-dataprep-ms
@@ -200,32 +248,154 @@ export VDMS_DATAPREP_HOST_PORT=6016
 export VDMS_DATAPREP_HOST=vdms-dataprep
 export VDMS_DATAPREP_ENDPOINT=http://$VDMS_DATAPREP_HOST:8000
 export VDMS_PIPELINE_MANAGER_UPLOAD=http://$PM_HOST:3000
+export DEFAULT_BUCKET_NAME="vdms-bucket"
 
-# env for vclip-embedding-ms
-export VCLIP_HOST_PORT=9777
-export VCLIP_MODEL=${VCLIP_MODEL}
-export VCLIP_START_OFFSET_SEC=0
-export VCLIP_CLIP_DURATION=15
-export VCLIP_NUM_FRAMES=64
-export VCLIP_DEVICE=${VCLIP_DEVICE:-CPU}
-export VCLIP_USE_OV=false
-# Set VCLIP_USE_OV to true if VCLIP_DEVICE is GPU
+# YOLOX model volume configuration for object detection
+export YOLOX_MODELS_VOLUME_NAME="vdms-yolox-models"
+export YOLOX_MODELS_MOUNT_PATH="/app/models/yolox"
+
+# Embedding processing mode settings (SDK vs API)
+# EMBEDDING_PROCESSING_MODE options:
+#   - "sdk": Use multimodal embedding service directly as SDK (optimized approach with better memory usage, default)
+#   - "api": Use HTTP API calls to multimodal embedding service (existing approach)
+export EMBEDDING_PROCESSING_MODE=${EMBEDDING_PROCESSING_MODE:-"sdk"}
+
+# Frame processing settings
+export FRAME_INTERVAL=${FRAME_INTERVAL:-15}
+export ENABLE_OBJECT_DETECTION=${ENABLE_OBJECT_DETECTION:-true}
+export DETECTION_CONFIDENCE=${DETECTION_CONFIDENCE:-0.85}
+# ROI consolidation parameters for grouping overlapping detections
+# ROI_CONSOLIDATION_IOU_THRESHOLD: IoU threshold used to cluster ROIs (higher = stricter merging)
+# ROI_CONSOLIDATION_CLASS_AWARE: only merge ROIs with matching class labels when true
+# ROI_CONSOLIDATION_CONTEXT_SCALE: expands merged ROI by a fraction of its size
+export ROI_CONSOLIDATION_ENABLED=${ROI_CONSOLIDATION_ENABLED:-false}
+export ROI_CONSOLIDATION_IOU_THRESHOLD=${ROI_CONSOLIDATION_IOU_THRESHOLD:-0.2}
+export ROI_CONSOLIDATION_CLASS_AWARE=${ROI_CONSOLIDATION_CLASS_AWARE:-false}
+export ROI_CONSOLIDATION_CONTEXT_SCALE=${ROI_CONSOLIDATION_CONTEXT_SCALE:-0.2}
+export FRAMES_TEMP_DIR=${FRAMES_TEMP_DIR:-"/tmp/dataprep"}
+
+# Application configuration
+export VDMS_DATAPREP_LOG_LEVEL=${VDMS_DATAPREP_LOG_LEVEL:-INFO}
+export MAX_PARALLEL_WORKERS=${MAX_PARALLEL_WORKERS:-""}
+export EMBEDDING_BATCH_SIZE=${EMBEDDING_BATCH_SIZE:-32}
+export ALLOW_ORIGINS=${ALLOW_ORIGINS:-*}
+export ALLOW_METHODS=${ALLOW_METHODS:-*}
+export ALLOW_HEADERS=${ALLOW_HEADERS:-*}
+
+# env for multimodal-embedding-serving (unified embedding service)
+export EMBEDDING_SERVER_PORT=9777
+export EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME}  # Must be explicitly provided - no default
+export TEXT_EMBEDDING_MODEL_NAME=${TEXT_EMBEDDING_MODEL_NAME}  # Optional - only required for unified case (--all)
+export DEFAULT_START_OFFSET_SEC=0
+export DEFAULT_CLIP_DURATION=${DEFAULT_CLIP_DURATION:--1}
+export DEFAULT_NUM_FRAMES=64
+export EMBEDDING_USE_OV=${EMBEDDING_USE_OV:-$SDK_USE_OPENVINO}
+export OV_MODELS_DIR=${OV_MODELS_DIR:-"/app/ov_models"}
+export EMBEDDING_OV_MODELS_DIR=${EMBEDDING_OV_MODELS_DIR:-$OV_MODELS_DIR}
+# NOTE: The default OpenVINO performance mode has been changed from "LATENCY" to "THROUGHPUT".
+# This impacts inference characteristics: "THROUGHPUT" optimizes for overall throughput, while "LATENCY" optimizes for response time.
+# Please review user documentation or migration notes for details on this change.
+export OV_PERFORMANCE_MODE=${OV_PERFORMANCE_MODE:-"THROUGHPUT"}
+echo -e "[multimodal-embedding-serving] ${GREEN}OpenVINO performance mode: ${YELLOW}$OV_PERFORMANCE_MODE${NC}"
+
+# Device Configuration
+export VDMS_DATAPREP_DEVICE=${VDMS_DATAPREP_DEVICE:-"CPU"}
+export SDK_USE_OPENVINO=${SDK_USE_OPENVINO:-true}
+
 if [ "$ENABLE_EMBEDDING_GPU" = true ]; then
-    export VCLIP_DEVICE=GPU
-    export VCLIP_USE_OV=true
-    echo -e "${BLUE}VCLIP-EMBEDDING-MS will use OpenVINO on GPU${NC}"
+    export VDMS_DATAPREP_DEVICE=GPU
 fi
-export VCLIP_HOST=vclip-embedding-ms
-export VCLIP_ENDPOINT=http://$VCLIP_HOST:8000/embeddings
+
+
+# Device Configuration Helper Functions
+configure_device() {
+    local device=${1:-"CPU"}
+
+    echo -e "${BLUE}Configuring device for all processing components: ${YELLOW}${device}${NC}"
+    echo -e "${BLUE}   This affects: embedding model, and object detection${NC}"
+
+    if [[ "${device}" == GPU* ]]; then
+        echo -e "${YELLOW}⚙️  Setting up GPU configuration...${NC}"
+        
+        # Check if Intel GPU is available
+        if ! lspci | grep -i "vga.*intel" > /dev/null 2>&1; then
+            echo -e "${RED}Warning: No Intel GPU detected. GPU mode may not work properly.${NC}"
+        else
+            echo -e "${GREEN}Intel GPU detected${NC}"
+        fi
+        
+        # Check if /dev/dri exists for GPU access
+        if [[ ! -d "/dev/dri" ]]; then
+            echo -e "${RED}Warning: /dev/dri not found. GPU acceleration may not be available.${NC}"
+        else
+            echo -e "${GREEN}DRI devices found for GPU acceleration${NC}"
+        fi
+        
+        # Set GPU-specific configuration
+        export VDMS_DATAPREP_DEVICE="${device}"
+        export SDK_USE_OPENVINO=true  # Force OpenVINO for GPU mode
+        
+        echo -e "${GREEN}GPU mode configured for all components:${NC}"
+        echo -e "   • OpenVINO: ${YELLOW}enabled${NC} (required for GPU)"
+        echo -e "   • Processing Device: ${YELLOW}GPU${NC} (decord, embedding, detection)"
+        echo -e "   • Video decoding: ${YELLOW}GPU-accelerated${NC}"
+        
+    else
+        echo -e "${BLUE} CPU mode configured for all components${NC}"
+        export VDMS_DATAPREP_DEVICE="${device}"
+    fi
+}
+
+# Device mode selection
+if [[ "${VDMS_DATAPREP_DEVICE}" == GPU* ]]; then
+    configure_device "${VDMS_DATAPREP_DEVICE}"
+else
+    configure_device "CPU"
+fi
+
+export EMBEDDING_DEVICE=${EMBEDDING_DEVICE:-$VDMS_DATAPREP_DEVICE}
+
+export MULTIMODAL_EMBEDDING_HOST=multimodal-embedding-serving
+export MULTIMODAL_EMBEDDING_ENDPOINT=http://$MULTIMODAL_EMBEDDING_HOST:8000/embeddings
+
+processing_scope="vdms-dataprep video decoding, YOLOX detection, and embedding execution"
+if [[ "${EMBEDDING_PROCESSING_MODE}" == "api" ]]; then
+    processing_scope+=", plus the multimodal-embedding-serving container"
+fi
+
+embedding_model_display=${EMBEDDING_MODEL_NAME:-"(not provided)"}
+embedding_endpoint_display=${MULTIMODAL_EMBEDDING_ENDPOINT:-"(not configured)"}
+
+if [[ "${EMBEDDING_PROCESSING_MODE}" == "sdk" ]]; then
+    embedding_mode_details="SDK mode keeps embeddings in-process within vdms-dataprep; no external HTTP calls are made."
+else
+    embedding_mode_details="API mode routes embeddings to multimodal-embedding-serving at ${embedding_endpoint_display}."
+fi
+
+echo -e "[vdms-dataprep] ${BLUE}Runtime Summary:${NC}"
+echo -e "   • [vdms-dataprep] Processing Device: ${YELLOW}${VDMS_DATAPREP_DEVICE}${NC} (${processing_scope})."
+if [[ "${EMBEDDING_PROCESSING_MODE}" == "api" ]]; then
+    echo -e "   • [multimodal-embedding-serving] Embedding Service Device: ${YELLOW}${EMBEDDING_DEVICE}${NC} (HTTP mode container)."
+fi
+echo -e "   • [vdms-dataprep] Embedding Mode: ${YELLOW}${EMBEDDING_PROCESSING_MODE}${NC} — ${embedding_mode_details}"
+echo -e "   • [multimodal-embedding-serving] Embedding Model: ${YELLOW}${embedding_model_display}${NC}"
+
+
+# Frame-to-Video Aggregation Settings for search-ms
+export AGGREGATION_ENABLED=${AGGREGATION_ENABLED:-true}
+export AGGREGATION_SEGMENT_DURATION=${AGGREGATION_SEGMENT_DURATION:-8}
+export AGGREGATION_MIN_GAP=${AGGREGATION_MIN_GAP:-0}
+export AGGREGATION_MAX_RESULTS=${AGGREGATION_MAX_RESULTS:-20}
+export AGGREGATION_INITIAL_K=${AGGREGATION_INITIAL_K:-1000}
+export AGGREGATION_CONTEXT_SEEK_OFFSET_SECONDS=${AGGREGATION_CONTEXT_SEEK_OFFSET_SECONDS:-0}
 
 # env for video-search
 export VS_HOST_PORT=7890
-export VS_INDEX_NAME=videosearch
-export VS_WATCHER_DIR=$PWD/data
-export VS_DELETE_PROCESSED_FILES=false
-export VS_INITIAL_DUMP=false
-export VS_DEFAULT_CLIP_DURATION=15
-export VS_DEBOUNCE_TIME=1
+export VS_WATCHER_DIR=${VS_WATCHER_DIR:-$PWD/data}
+export VS_DELETE_PROCESSED_FILES=${VS_DELETE_PROCESSED_FILES:-false}
+export VS_INITIAL_DUMP=${VS_INITIAL_DUMP:-false}
+export VS_WATCH_DIRECTORY_RECURSIVE=${VS_WATCH_DIRECTORY_RECURSIVE:-false}
+export VS_DEBOUNCE_TIME=${VS_DEBOUNCE_TIME:-10}
 export VS_HOST=video-search
 export VS_ENDPOINT=http://$VS_HOST:8000
 
@@ -238,16 +408,19 @@ export UI_ASSETS_ENDPOINT=${UI_ASSETS_ENDPOINT:-/datastore}
 
 export CONFIG_SOCKET_APPEND=${CONFIG_SOCKET_APPEND} # Set this to CONFIG_ON in your shell, if nginx not being used
 
+# Telemetry collector toggle for search (disabled by default)
+export ENABLE_VSS_COLLECTOR=${ENABLE_VSS_COLLECTOR:-false}
+
 # Object detection model settings
 export OD_MODEL_NAME=${OD_MODEL_NAME}
 export OD_MODEL_TYPE=${OD_MODEL_TYPE:-"yolo_v8"}
-export OD_MODEL_OUTPUT_DIR=${OV_MODEL_DIR}/yoloworld
-echo -e "${GREEN}Using object detection model: ${YELLOW}$OD_MODEL_NAME of type $OD_MODEL_TYPE ${NC}"
-echo -e "${GREEN}Output directory for object detection model: ${YELLOW}$OD_MODEL_OUTPUT_DIR ${NC}"
+export OD_MODEL_OUTPUT_DIR=${OV_MODEL_DIR}/yoloworld/v2
+echo -e "[video-ingestion] ${GREEN}Using object detection model: ${YELLOW}$OD_MODEL_NAME of type $OD_MODEL_TYPE ${NC}"
+echo -e "[video-ingestion] ${GREEN}Output directory for object detection model: ${YELLOW}$OD_MODEL_OUTPUT_DIR ${NC}"
 
 
-# Verify if required environment variables are set in current shell, only when container down is not requested.
-if [ "$1" != "--down" ]; then
+# Verify if required environment variables are set in current shell, only when container down or clean is not requested.
+if [ "$1" != "--down" ] && [ "$1" != "--clean-data" ] && [ "$2" != "config" ]; then
     if [ -z "$MINIO_ROOT_USER" ]; then
         echo -e "${RED}ERROR: MINIO_ROOT_USER is not set in your shell environment.${NC}"
         return
@@ -266,33 +439,54 @@ if [ "$1" != "--down" ]; then
         echo -e "${RED}ERROR: POSTGRES_PASSWORD is not set in your shell environment.${NC}"
         return
     fi
+    if [ "$1" != "--search" ]; then
+        if [ -z "$RABBITMQ_USER" ]; then
+            echo -e "${RED}ERROR: RABBITMQ_USER is not set in your shell environment.${NC}"
+            return
+        fi
+        if [ -z "$RABBITMQ_PASSWORD" ]; then
+            echo -e "${RED}ERROR: RABBITMQ_PASSWORD is not set in your shell environment.${NC}"
+            return
+        fi
+        if [ -z "$VLM_MODEL_NAME" ]; then
+            echo -e "${RED}ERROR: VLM_MODEL_NAME is not set in your shell environment.${NC}"
+            return
+        fi
+        if [ -z "$ENABLED_WHISPER_MODELS" ]; then
+            echo -e "${RED}ERROR: ENABLED_WHISPER_MODELS is not set in your shell environment.${NC}"
+            return
+        fi
+        if [ -z "$OD_MODEL_NAME" ]; then
+            echo -e "${RED}ERROR: OD_MODEL_NAME is not set in your shell environment.${NC}"
+            return
+        fi
+    fi
+    if [ "$1" != "--summary" ] || [ "$1" != "--all" ]; then
+        if [ -z "$EMBEDDING_MODEL_NAME" ]; then
+            echo -e "${RED}ERROR: EMBEDDING_MODEL_NAME is not set in your shell environment.${NC}"
+            echo -e "${YELLOW}This is required for both SDK and API embedding modes${NC}"
+            return
+        fi
+    fi
+    
+    # Validate embedding processing mode
+    if [[ "$EMBEDDING_PROCESSING_MODE" != "api" && "$EMBEDDING_PROCESSING_MODE" != "sdk" ]]; then
+        echo -e "${RED}Invalid EMBEDDING_PROCESSING_MODE: $EMBEDDING_PROCESSING_MODE${NC}"
+        echo -e "${YELLOW}Valid options are: 'api' or 'sdk'${NC}"
+        return
+    fi
+    # Enforce dedicated text embedding selection for unified (--all) runs.
+    if [ "$1" = "--all" ]; then
+        if [ -z "$EMBEDDING_MODEL_NAME" ]; then
+            echo -e "${RED}ERROR: EMBEDDING_MODEL_NAME is not set in your shell environment.${NC}"
+            return
+        elif [ -z "$TEXT_EMBEDDING_MODEL_NAME" ]; then
+            echo -e "${RED}ERROR: TEXT_EMBEDDING_MODEL_NAME is not set in your shell environment.${NC}"
+            return
+        fi
 
-    if [ -z "$RABBITMQ_USER" ]; then
-        echo -e "${RED}ERROR: RABBITMQ_USER is not set in your shell environment.${NC}"
-        return
-    fi
-    if [ -z "$RABBITMQ_PASSWORD" ]; then
-        echo -e "${RED}ERROR: RABBITMQ_PASSWORD is not set in your shell environment.${NC}"
-        return
-    fi
-    if [ -z "$VCLIP_MODEL" ]; then
-        echo -e "${RED}ERROR: VCLIP_MODEL is not set in your shell environment.${NC}"
-        return
-    elif [ "$VCLIP_MODEL" != "openai/clip-vit-base-patch32" ]; then
-        echo -e "${RED}ERROR: VCLIP_MODEL is set to an invalid value. Expected: 'openai/clip-vit-base-patch32'.${NC}"
-        return
-    fi
-    if [ -z "$VLM_MODEL_NAME" ]; then
-        echo -e "${RED}ERROR: VLM_MODEL_NAME is not set in your shell environment.${NC}"
-        return
-    fi
-    if [ -z "$ENABLED_WHISPER_MODELS" ]; then
-        echo -e "${RED}ERROR: ENABLED_WHISPER_MODELS is not set in your shell environment.${NC}"
-        return
-    fi
-    if [ -z "$OD_MODEL_NAME" ]; then
-        echo -e "${RED}ERROR: OD_MODEL_NAME is not set in your shell environment.${NC}"
-        return
+        export EMBEDDING_MODEL_NAME=${TEXT_EMBEDDING_MODEL_NAME}
+        echo "Using TEXT_EMBEDDING_MODEL_NAME to override EMBEDDING_MODEL_NAME for --all mode."
     fi
     if [ "$ENABLE_OVMS_LLM_SUMMARY" = true ] || [ "$ENABLE_OVMS_LLM_SUMMARY_GPU" = true ]; then
         if [ -z "$OVMS_LLM_MODEL_NAME" ]; then
@@ -307,11 +501,6 @@ if [ "$1" = "--setenv" ]; then
     echo -e  "${BLUE}Done setting up all environment variables. ${NC}"
     return 0
 fi
-
-# Generate docker volume
-echo -e  "${BLUE}Creating Docker volumes for common services:${NC}"
-docker volume create pg_data
-docker volume create minio_data
 
 # Add rendering device group ID for GPU support when needed
 # Check if render device exist
@@ -348,18 +537,20 @@ convert_object_detection_models() {
     source ov_model_venv/bin/activate
 
     echo -e  "Installing required packages for model conversion..."
-    pip install -q "openvino>=2025.0.0" "nncf>=2.9.0"
-    pip install -q "torch>=2.1" "torchvision>=0.16" "ultralytics==8.3.59" onnx tqdm opencv-python --extra-index-url https://download.pytorch.org/whl/cpu
+    pip install -q "ultralytics==8.3.232" "openvino==2025.4.1" --extra-index-url https://download.pytorch.org/whl/cpu
     
-    # Create model conversion script
-
+    # Run script to convert the model to OpenVINO format and verify conversion
     echo -e  "Converting object detection model: ${OD_MODEL_NAME} (${OD_MODEL_TYPE})..."
     python3 video-ingestion/resources/scripts/converter.py --model-name "${OD_MODEL_NAME}" --model-type "${OD_MODEL_TYPE}" --output-dir "${OD_MODEL_OUTPUT_DIR}"
-
-    echo -e  "Model conversion completed. Cleaning up..."
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}ERROR: Model conversion failed for ${OD_MODEL_NAME}.${NC}"
+    else
+        echo -e "${GREEN}Model conversion succeeded for ${OD_MODEL_NAME}.${NC}"
+        echo -e  "${BLUE}Object detection model ${OD_MODEL_NAME} has been successfully converted and saved to ${OD_MODEL_OUTPUT_DIR}${NC}"
+    fi
+    echo -e "Cleaning up virtual environment..."
     deactivate
     rm -rf ov_model_venv
-    echo -e  "Object detection model ${OD_MODEL_NAME} has been successfully converted and saved to ${OD_MODEL_OUTPUT_DIR}"
 }
 
 # Function to export and save requested model for OVMS
@@ -371,7 +562,7 @@ export_model_for_ovms() {
 
     # Download the OVMS model export script
     if [ ! -f export_model.py ]; then
-        curl https://raw.githubusercontent.com/openvinotoolkit/model_server/refs/heads/releases/2025/1/demos/common/export_models/export_model.py -o export_model.py
+        curl https://raw.githubusercontent.com/openvinotoolkit/model_server/refs/tags/v2025.4.1/demos/common/export_models/export_model.py -o export_model.py
     else
         echo -e  "${YELLOW}Model export script already exists, skipping download${NC}"
     fi
@@ -389,11 +580,37 @@ export_model_for_ovms() {
     source ovms_venv/bin/activate
     
     # Install requirements in the virtual environment
-    pip install --no-cache-dir -r https://raw.githubusercontent.com/openvinotoolkit/model_server/refs/heads/releases/2025/1/demos/common/export_models/requirements.txt
+    local ovms_requirements_url="https://raw.githubusercontent.com/openvinotoolkit/model_server/refs/tags/v2025.4.1/demos/common/export_models/requirements.txt"
+    local tmp_requirements
+    tmp_requirements=$(mktemp)
+
+    if ! curl -fsSL "$ovms_requirements_url" -o "$tmp_requirements"; then
+        echo -e "${RED}ERROR: Failed to download OVMS requirements from ${ovms_requirements_url}.${NC}"
+        deactivate
+        rm -rf ovms_venv
+        rm -f "$tmp_requirements"
+        return 1
+    fi
+
+    if grep -q '^transformers' "$tmp_requirements"; then
+        sed -i 's/^transformers.*/transformers==4.53.3/' "$tmp_requirements"
+    else
+        echo 'transformers==4.53.3' >> "$tmp_requirements"
+    fi
+
+    pip install --no-cache-dir -r "$tmp_requirements"
+    local pip_status=$?
+    rm -f "$tmp_requirements"
+    if [ $pip_status -ne 0 ]; then
+        echo -e "${RED}ERROR: Failed to install OVMS requirements.${NC}"
+        deactivate
+        rm -rf ovms_venv
+        return 1
+    fi
     if [ "$GATED_MODEL" = true ]; then
-        pip install --no-cache-dir huggingface-hub  # Install huggingface-hub for downloading gated models
+        pip install --no-cache-dir -U huggingface_hub[hf_xet]==0.36.0 # Install huggingface-hub for downloading gated models
         echo -e "${BLUE}Logging in to Hugging Face to access gated models...${NC}"
-        huggingface-cli login --token $HUGGINGFACE_TOKEN  # Login to Hugging Face using the provided token
+	hf auth login --token $HUGGINGFACE_TOKEN # Login to Hugging Face using the provided token
     fi
     mkdir -p models
 
@@ -423,53 +640,126 @@ export_model_for_ovms() {
 }
 
 if [ "$1" = "--summary" ] || [ "$1" = "--all" ]; then
-
-    echo -e  "${BLUE}Creating Docker volumes for Video Summarization services:${NC}"
-    docker volume create ov-models
-    docker volume create vol_evam_pipeline_root
-    docker volume create audio_analyzer_data
+    BACKEND_PROFILE="vlm-ov"
 
     # Turn on feature flags for summarization and turn off search
     export SUMMARY_FEATURE="FEATURE_ON"
     export SEARCH_FEATURE="FEATURE_OFF"
+    export APP_FEATURE_MUX="ATOMIC"
 
     # If summarization is enabled, set up the environment for OVMS or VLM for summarization
     [ "$1" = "--summary" ] && APP_COMPOSE_FILE="-f docker/compose.base.yaml -f docker/compose.summary.yaml" && \
-        echo -e  "${GREEN}Setting up Video Summarization application${NC}"
+    echo -e  "[pipeline-manager] ${GREEN}Setting up Video Summarization application${NC}"
 
     # If no arguments are passed or if --all is passed, set up both summarization and search   
     [ "$1" = "--all" ] && \
-        echo -e  "${BLUE}Creating Docker volumes for Video Search services:${NC}" && \
-        docker volume create data-prep && \
+    echo -e  "[video-search] ${BLUE}Creating Docker volumes for Video Search services:${NC}" && \
         export SEARCH_FEATURE="FEATURE_ON" && \
+        export APP_FEATURE_MUX="SUMMARY_SEARCH" && \
+        export VS_INDEX_NAME="video_summary_embeddings" && \
         APP_COMPOSE_FILE="-f docker/compose.base.yaml -f docker/compose.summary.yaml -f docker/compose.search.yaml" && \
-        echo -e  "${GREEN}Setting up both applications: Video Summarization and Video Search${NC}"
+        if [ "$ENABLE_VSS_COLLECTOR" = true ]; then
+            APP_COMPOSE_FILE="$APP_COMPOSE_FILE -f docker/compose.telemetry.yaml"
+            echo -e  "[telemetry] ${GREEN}vss-collector enabled (set ENABLE_VSS_COLLECTOR=true to keep enabled)${NC}"
+        else
+            echo -e  "[telemetry] ${YELLOW}vss-collector disabled (set ENABLE_VSS_COLLECTOR=true to enable)${NC}"
+        fi && \
+    echo -e  "[pipeline-manager] ${GREEN}Setting up both applications: Video Summarization and Video Search${NC}"
+    
+    # Create YOLOX models volume for all modes that include search functionality
+    if [ "$1" = "--all" ] && [ "$2" != "config" ]; then
+        if ! docker volume ls | grep -q "${YOLOX_MODELS_VOLUME_NAME}"; then
+            echo -e "[vdms-dataprep] ${BLUE}Creating Docker volume for YOLOX models: ${YOLOX_MODELS_VOLUME_NAME}${NC}"
+            docker volume create "${YOLOX_MODELS_VOLUME_NAME}"
+            if [ $? = 0 ]; then
+                echo -e "[vdms-dataprep] ${GREEN}YOLOX models volume created successfully${NC}"
+            else
+                echo -e "[vdms-dataprep] ${RED}ERROR: Failed to create YOLOX models volume${NC}"
+                return 1
+            fi
+        else
+            echo -e "[vdms-dataprep] ${GREEN}YOLOX models volume already exists: ${YOLOX_MODELS_VOLUME_NAME}${NC}"
+        fi
 
-    # Check if the object detection model directory exists or whether docker-compose config is requested
-    if [ ! -d "${OD_MODEL_OUTPUT_DIR}" ] && [ "$2" != "config" ]; then
-        echo -e  "${YELLOW}Object detection model directory does not exist. Creating it...${NC}"
-        mkdir -p "${OD_MODEL_OUTPUT_DIR}"
-        convert_object_detection_models
-    else
-        echo -e  "${YELLOW}Object detection model already exists. Skipping model setup...${NC}"
+        # Create ov-models volume for embedding models if it doesn't exist
+        if ! docker volume ls | grep -q "ov-models"; then
+            echo -e "[multimodal-embedding-serving] ${BLUE}Creating Docker volume for ov-models${NC}"
+            docker volume create ov-models
+            if [ $? = 0 ]; then
+                echo -e "[multimodal-embedding-serving] ${GREEN}ov-models volume created successfully${NC}"
+            else
+                echo -e "[multimodal-embedding-serving] ${RED}ERROR: Failed to create ov-models volume${NC}"
+                return 1
+            fi
+        else
+            echo -e "[multimodal-embedding-serving] ${GREEN}ov-models volume already exists${NC}"
+        fi
+
+        # Create data-prep volume if it doesn't exist
+        if ! docker volume ls | grep -q "data-prep"; then
+            echo -e "[vdms-dataprep] ${BLUE}Creating Docker volume for data-prep${NC}"
+            docker volume create data-prep
+            if [ $? = 0 ]; then
+                echo -e "[vdms-dataprep] ${GREEN}data-prep volume created successfully${NC}"
+            else
+                echo -e "[vdms-dataprep] ${RED}ERROR: Failed to create data-prep volume${NC}"
+                return 1
+            fi
+        else
+            echo -e "[vdms-dataprep] ${GREEN}data-prep volume already exists${NC}"
+        fi
+    fi
+
+    # Validate expected OpenVINO artifact; directory-only checks can miss partial/incomplete model state.
+    od_model_xml="${OD_MODEL_OUTPUT_DIR}/FP32/${OD_MODEL_NAME}.xml"
+    od_model_bin="${OD_MODEL_OUTPUT_DIR}/FP32/${OD_MODEL_NAME}.bin"
+    if [ "$2" != "config" ]; then
+        if [ ! -f "${od_model_xml}" ] || [ ! -f "${od_model_bin}" ]; then
+            echo -e  "[vdms-dataprep] ${YELLOW}Object detection model file not found at ${od_model_xml} or ${od_model_bin}. Running model conversion...${NC}"
+            mkdir -p "${OD_MODEL_OUTPUT_DIR}"
+            convert_object_detection_models
+        else
+            echo -e  "[vdms-dataprep] ${YELLOW}Object detection model file found at ${od_model_xml}. Skipping model setup...${NC}"
+        fi
+    fi
+
+    if [ "$ENABLE_VLLM" = true ]; then
+        echo -e "[vllm-cpu-service] ${BLUE}Using vLLM for both chunk captioning and final summary${NC}"
+        echo -e "[vllm-cpu-service] ${YELLOW}Disabling OVMS and vlm-openvino-serving because ENABLE_VLLM=true${NC}"
+        BACKEND_PROFILE="vllm"
+        export ENABLE_OVMS_LLM_SUMMARY=false
+        export ENABLE_OVMS_LLM_SUMMARY_GPU=false
+        export ENABLE_VLM_GPU=false
+        export USE_OVMS_CONFIG=CONFIG_OFF
+        export LLM_SUMMARIZATION_API=${VLLM_ENDPOINT}
+        export VLM_ENDPOINT=${VLLM_ENDPOINT}
+        export VLM_HOST=${VLLM_HOST}
+        APP_COMPOSE_FILE="$APP_COMPOSE_FILE -f docker/compose.vllm.yaml"
+    fi
+
+    # Check if both LLM and VLM are configured for GPU. In which case, prioritize VLM for GPU and set OVMS to CPU
+    if [ "$ENABLE_VLLM" != true ] && [ "$ENABLE_OVMS_LLM_SUMMARY_GPU" = true ] && \
+       [ "$ENABLE_VLM_GPU" = true ]; then
+        echo -e "[ovms-service] ${BLUE}Both VLM and LLM are configured for GPU. Resetting OVMS to run on CPU${NC}"
+        export ENABLE_OVMS_LLM_SUMMARY_GPU="false"
     fi
 
     # If OVMS is to be used for summarization, set up the environment variables and compose files accordingly
-    if [ "$ENABLE_OVMS_LLM_SUMMARY" = true ] || [ "$ENABLE_OVMS_LLM_SUMMARY_GPU" = true ]; then
-        echo -e "${BLUE}Using OVMS for LLM summarization${NC}"
+    if [ "$ENABLE_VLLM" != true ] && { [ "$ENABLE_OVMS_LLM_SUMMARY" = true ] || [ "$ENABLE_OVMS_LLM_SUMMARY_GPU" = true ]; }; then
+        echo -e "[ovms-service] ${BLUE}Using OVMS for generating final summary for the video${NC}"
         export USE_OVMS_CONFIG=CONFIG_ON
         export LLM_SUMMARIZATION_API=http://$OVMS_HOST/v3
         export LLM_MODEL_API="v1/config"
 
         # Set relevant variables, compose files and profiles based on whether GPU is used or not
         if [ "$ENABLE_OVMS_LLM_SUMMARY_GPU" = true ]; then
-            echo -e "${BLUE}Using GPU acceleration for OVMS${NC}"
+            echo -e "[ovms-service] ${BLUE}Using GPU acceleration for OVMS${NC}"
             export OVMS_CACHE_SIZE=2
             export LLM_COMPRESSION_WEIGHT_FORMAT=int4
             export LLM_DEVICE=GPU
             APP_COMPOSE_FILE="$APP_COMPOSE_FILE -f docker/compose.gpu_ovms.yaml --profile ovms"
         else
-            echo -e "${BLUE}Running OVMS on CPU${NC}"
+            echo -e "[ovms-service] ${BLUE}Running OVMS on CPU${NC}"
             export OVMS_CACHE_SIZE=10
             export LLM_COMPRESSION_WEIGHT_FORMAT=int8
             export LLM_DEVICE=CPU
@@ -486,26 +776,26 @@ if [ "$1" = "--summary" ] || [ "$1" = "--all" ]; then
 
             # Check if model config exists            
             if [ ! -f "${ovms_model_config}" ]; then
-                echo -e "${YELLOW}No existing model configurations found. Exporting model ${RED}${OVMS_LLM_MODEL_NAME}${YELLOW}...${NC}"
+                echo -e "[ovms-service] ${YELLOW}No existing model configurations found. Exporting model ${RED}${OVMS_LLM_MODEL_NAME}${YELLOW}...${NC}"
                 needs_export=true
             # Check whether the model exists in OVMS config
             elif grep -q ${OVMS_LLM_MODEL_NAME} "${ovms_model_config}"; then
-                echo -e "${YELLOW}Model ${RED}${OVMS_LLM_MODEL_NAME}${YELLOW} exists in OVMS config. Checking device type...${NC}"
+                echo -e "[ovms-service] ${YELLOW}Model ${RED}${OVMS_LLM_MODEL_NAME}${YELLOW} exists in OVMS config. Checking device type...${NC}"
                 # If model exists, check if device type matches
                 if [ -f "${device_marker_file}" ]; then
                     saved_device=$(cat "${device_marker_file}")
                     if [ "${saved_device}" != "${LLM_DEVICE}" ]; then
-                        echo -e "${YELLOW}Model was exported for ${RED}${saved_device}${YELLOW}. Re-exporting model for ${RED}${LLM_DEVICE}${YELLOW}...${NC}"
+                        echo -e "[ovms-service] ${YELLOW}Model was exported for ${RED}${saved_device}${YELLOW}. Re-exporting model for ${RED}${LLM_DEVICE}${YELLOW}...${NC}"
                         needs_export=true
                     else
-                        echo -e "${YELLOW}Model was exported for ${RED}${LLM_DEVICE}${YELLOW}. Skipping model setup...${NC}"
+                        echo -e "[ovms-service] ${YELLOW}Model was exported for ${RED}${LLM_DEVICE}${YELLOW}. Skipping model setup...${NC}"
                     fi
                 else
-                    echo -e "${YELLOW}Device type information missing. Re-exporting model...${NC}"
+                    echo -e "[ovms-service] ${YELLOW}Device type information missing. Re-exporting model...${NC}"
                     needs_export=true
                 fi
             else
-                echo -e "${YELLOW}Model ${RED}${OVMS_LLM_MODEL_NAME}${YELLOW} not found in OVMS config. Exporting model...${NC}"
+                echo -e "[ovms-service] ${YELLOW}Model ${RED}${OVMS_LLM_MODEL_NAME}${YELLOW} not found in OVMS config. Exporting model...${NC}"
                 needs_export=true
             fi
             
@@ -514,47 +804,92 @@ if [ "$1" = "--summary" ] || [ "$1" = "--all" ]; then
                 export_model_for_ovms
             fi
         fi
-
-        # If config is passed, set the command to only generate the config
-        FINAL_ARG="up -d" && [ "$2" = "config" ] && FINAL_ARG="config"
-        DOCKER_COMMAND="docker compose $APP_COMPOSE_FILE $FINAL_ARG"
-
-    else
+    elif [ "$ENABLE_VLLM" != true ]; then
+        echo -e "[vlm-openvino-serving] ${BLUE}Using VLM for generating final summary for the video${NC}"
         export USE_OVMS_CONFIG=CONFIG_OFF
         export LLM_SUMMARIZATION_API=http://$VLM_HOST:8000/v1
+    fi
 
+    if [ "$ENABLE_VLLM" != true ]; then
         if [ "$ENABLE_VLM_GPU" = true ]; then
             export VLM_DEVICE=GPU
             export PM_VLM_CONCURRENT=1
             export PM_LLM_CONCURRENT=1
             export VLM_COMPRESSION_WEIGHT_FORMAT=int4
-            export PM_MULTI_FRAME_COUNT=6
+            if [ "$PM_MULTI_FRAME_COUNT_DEFAULTED" = true ]; then
+                export PM_MULTI_FRAME_COUNT=6
+            fi
             export WORKERS=1
-            echo -e "${BLUE}Using VLM for summarization on GPU${NC}"
+            echo -e "[vlm-openvino-serving] ${BLUE}Using VLM for summarization on GPU${NC}"
         else
             export VLM_DEVICE=CPU
-            echo -e "${BLUE}Using VLM for summarization on CPU${NC}"
+            echo -e "[vlm-openvino-serving] ${BLUE}Using VLM for summarization on CPU${NC}"
         fi
-
-        # if config is passed, set the command to only generate the config
-        FINAL_ARG="up -d" && [ "$2" = "config" ] && FINAL_ARG="config"
-        DOCKER_COMMAND="docker compose $APP_COMPOSE_FILE $FINAL_ARG"
     fi
 
+    # if config is passed, set the command to only generate the config
+    FINAL_ARG="up -d" && [ "$2" = "config" ] && FINAL_ARG="config"
+    DOCKER_COMMAND="docker compose $APP_COMPOSE_FILE --profile $BACKEND_PROFILE $FINAL_ARG"
+
 elif [ "$1" = "--search" ]; then
-
-    echo -e  "${BLUE}Creating Docker volumes for Video Search services: ${NC}"
-    docker volume create ov-models
-    docker volume create data-prep
     mkdir -p ${VS_WATCHER_DIR}
-
     # Turn on feature flags for search and turn off summarization
     export SUMMARY_FEATURE="FEATURE_OFF"
     export SEARCH_FEATURE="FEATURE_ON"
+    export APP_FEATURE_MUX="ATOMIC"
+    export VS_INDEX_NAME="video_frame_embeddings"  # DB Index or DB Collection name for video search standalone setup
+
+    # Create YOLOX models volume for object detection if it doesn't exist
+    if ! docker volume ls | grep -q "${YOLOX_MODELS_VOLUME_NAME}"; then
+        echo -e "[vdms-dataprep] ${BLUE}Creating Docker volume for YOLOX models: ${YOLOX_MODELS_VOLUME_NAME}${NC}"
+        docker volume create "${YOLOX_MODELS_VOLUME_NAME}"
+        if [ $? = 0 ]; then
+            echo -e "[vdms-dataprep] ${GREEN}YOLOX models volume created successfully${NC}"
+        else
+            echo -e "[vdms-dataprep] ${RED}ERROR: Failed to create YOLOX models volume${NC}"
+            return 1
+        fi
+    else
+        echo -e "[vdms-dataprep] ${GREEN}YOLOX models volume already exists: ${YOLOX_MODELS_VOLUME_NAME}${NC}"
+    fi
+
+    # Create ov-models volume for embedding models if it doesn't exist
+    if ! docker volume ls | grep -q "ov-models"; then
+        echo -e "[multimodal-embedding-serving] ${BLUE}Creating Docker volume for ov-models${NC}"
+        docker volume create ov-models
+        if [ $? = 0 ]; then
+            echo -e "[multimodal-embedding-serving] ${GREEN}ov-models volume created successfully${NC}"
+        else
+            echo -e "[multimodal-embedding-serving] ${RED}ERROR: Failed to create ov-models volume${NC}"
+            return 1
+        fi
+    else
+        echo -e "[multimodal-embedding-serving] ${GREEN}ov-models volume already exists${NC}"
+    fi
+
+    # Create data-prep volume if it doesn't exist
+    if ! docker volume ls | grep -q "data-prep"; then
+        echo -e "[vdms-dataprep] ${BLUE}Creating Docker volume for data-prep${NC}"
+        docker volume create data-prep
+        if [ $? = 0 ]; then
+            echo -e "[vdms-dataprep] ${GREEN}data-prep volume created successfully${NC}"
+        else
+            echo -e "[vdms-dataprep] ${RED}ERROR: Failed to create data-prep volume${NC}"
+            return 1
+        fi
+    else
+        echo -e "[vdms-dataprep] ${GREEN}data-prep volume already exists${NC}"
+    fi
 
     # If search is enabled, set up video search only
-    APP_COMPOSE_FILE="-f docker/compose.base.yaml -f docker/compose.search.yaml" 
-    echo -e  "${GREEN}Setting up Video Search application${NC}"
+    APP_COMPOSE_FILE="-f docker/compose.base.yaml -f docker/compose.search.yaml"
+    if [ "$ENABLE_VSS_COLLECTOR" = true ]; then
+        APP_COMPOSE_FILE="$APP_COMPOSE_FILE -f docker/compose.telemetry.yaml"
+        echo -e  "[telemetry] ${GREEN}vss-collector enabled (set ENABLE_VSS_COLLECTOR=true to keep enabled)${NC}"
+    else
+        echo -e  "[telemetry] ${YELLOW}vss-collector disabled (set ENABLE_VSS_COLLECTOR=true to enable)${NC}"
+    fi
+    echo -e  "[video-search] ${GREEN}Setting up Video Search application${NC}"
 
     # if config is passed, set the command to only generate the config
     FINAL_ARG="up -d" && [ "$2" = "config" ] && FINAL_ARG="config"

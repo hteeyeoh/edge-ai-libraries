@@ -366,14 +366,21 @@ async def ingest_links(urls: list[str]) -> dict:
         dict: A status message indicating the result of the ingestion.
     """
     try:
-        if urls:
-            ingest_url_to_pgvector(urls)
+        if not urls:
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                detail="No URLs provided for ingestion."
+            )
 
-        result = {"status": 200, "message": "Data preparation succeeded"}
-        return result
+        result = ingest_url_to_pgvector(urls)
+
+        return {
+            "status": 200,
+            "message": f"Data preparation completed: {result['successful']}/{result['total_urls']} URLs succeeded",
+        }
 
     except HTTPException as e:
-        raise e
+        raise
 
     except Exception as e:
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail=str(e))
@@ -389,7 +396,7 @@ async def delete_urls(
     url: Optional[str] = None, delete_all: Optional[bool] = False
 ) -> None:
     """
-    Delete a document or all documents from storage and their embeddings from Vector DB.
+    Delete a URL or all URLs from storage and their embeddings from Vector DB.
 
     Args:
         url (str): URL to be deleted

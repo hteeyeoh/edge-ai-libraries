@@ -18,20 +18,21 @@
 
 ## Overview
 
-Deep Learning Streamer Pipeline Server (DL Streamer Pipeline Server) is a Python-based, interoperable containerized microservice for easy development and deployment of video analytics pipelines. It is built on top of [GStreamer](https://gstreamer.freedesktop.org/documentation/) and [Deep Learning Streamer (DL Streamer)](https://github.com/open-edge-platform/edge-ai-libraries/blob/main/libraries/dl-streamer/docs/source/index.md), providing video ingestion and deep learning inferencing functionalities.
+Deep Learning Streamer Pipeline Server (DL Streamer Pipeline Server) is a Python-based, interoperable containerized microservice for easy development and deployment of video analytics pipelines. It is built on top of [GStreamer](https://gstreamer.freedesktop.org/documentation/) and [Deep Learning Streamer (DL Streamer)](https://github.com/open-edge-platform/dlstreamer/blob/main/docs/user-guide/index.md), providing video ingestion and deep learning inferencing functionalities.
 
 Video analytics involves the conversion of video streams into valuable insights through the application of video processing, inference, and analytics operations. It finds applications in various business sectors including healthcare, retail, entertainment, and industrial domains. The algorithms utilized in video analytics are responsible for performing tasks such as object detection, classification, identification, counting, and tracking on the input video stream.
 
 
-Note - The detailed documentation of Deep Learning Streamer Pipeline Server can be found [here](https://docs.openedgeplatform.intel.com/edge-ai-libraries/dlstreamer-pipeline-server/main/user-guide/Overview.html)
+> **Note:** Detailed documentation for Deep Learning Streamer Pipeline Server can be found on
+[the documentation website](https://docs.openedgeplatform.intel.com/dev/edge-ai-libraries/dlstreamer-pipeline-server/index.html).
 
 ## Architecture
 
-![Deep Learning Streamer Pipeline Server Architecture](./docs/user-guide/images/dls-pipelineserver-simplified-arch.png)
+![Deep Learning Streamer Pipeline Server Architecture](./docs/user-guide/_assets/dls-pipelineserver-simplified-arch.png)
 
 ## Prerequisites For Target System
 
-- [System Requirements](./docs/user-guide/system-requirements.md)
+- [System Requirements](./docs/user-guide/get-started/system-requirements.md)
 
 ## Quick try out
 
@@ -102,7 +103,7 @@ The REST request will return a pipeline instance ID, which can be used as an ide
 
 - RTSP Stream will be accessible at `rtsp://<SYSTEM_IP_ADDRESS>:8554/pallet-defect-detection`.  Users can view this on any media player e.g. vlc (as a network stream), ffplay etc
 
-  ![sample frame RTSP stream](./docs/user-guide/images/sample-pallet-defect-detection.png)
+  ![sample frame RTSP stream](./docs/user-guide/_assets/sample-pallet-defect-detection.png)
 
 To check the pipeline status and stop the pipeline send the following requests,
 
@@ -147,47 +148,54 @@ Update the following lines in [.env file](./docker/.env) for choosing the right 
   BUILD_TARGET=
   ```
 
-  Note: If you do not have access to the above mentioned `BASE_IMAGE`, then you can build [DL Streamer docker image from source](https://github.com/open-edge-platform/edge-ai-libraries/tree/main/libraries/dl-streamer#build-the-dlstreamer-docker-image-with) and use it as `BASE_IMAGE` in the above mentioned `.env` file
+  Note: If you do not have access to the above mentioned `BASE_IMAGE`, then you can build [DL Streamer docker image from source](https://github.com/open-edge-platform/dlstreamer/blob/main/docs/user-guide/dev_guide/advanced_install/advanced_build_docker_image.md) and use it as `BASE_IMAGE` in the above mentioned `.env` file
 
 ### Build Deep Learning Streamer Pipeline Server image and start container <a name="build-image-and-start-container"></a>
 
 Run the following commands:
 
-   ```sh
-     cd docker
-     source .env # sometimes this is needed as docker compose doesn't always pick up the necessary env variables
-     docker compose build
-   ```
+To enable GPU/NPU you must first grant the container user access to GPU/NPU device(s).Because Docker Compose does not evaluate shell expressions, you need to determine the `render` group ID on the host system and define/export it as an environment variable **before** running Docker Compose. You can add group ID in `[WORKDIR]/edge-ai-libraries/microservices/dlstreamer-pipeline-server/docker/.env`
+To check the render ID group you can use below command:
+
+  ```sh
+  stat -c "%g" /dev/dri/render* | head -1
+  ```
+
+  ```sh
+  cd docker
+  source .env # sometimes this is needed as docker compose doesn't always pick up the necessary env variables
+  docker compose build
+  ```
 
    The docker image of DL Streamer Pipeline Server is now built (based on the .env changes done above) and available for you to run.
 
-   ```sh
-     docker compose up
-   ```
+  ```sh
+  docker compose up
+  ```
 
 ---
 ### Run default sample
-Refer [here](https://docs.openedgeplatform.intel.com/edge-ai-libraries/dlstreamer-pipeline-server/main/user-guide/get-started.html) to run default sample upon bringing up Intel® Deep Learning Streamer Pipeline Server container.
+Refer to the relevant [Get Started](https://docs.openedgeplatform.intel.com/dev/edge-ai-libraries/dlstreamer-pipeline-server/get-started.html#run-default-sample) section to run default sample upon bringing up Intel® Deep Learning Streamer Pipeline Server container.
 
 ---
 ## Legal compliance: Build a docker image containing sources for GPL/LGPL/AGPL binary distributed components
 
   ```sh
-    docker build -f sources.Dockerfile -t intel/dlstreamer-pipeline-server:3.1.0-sources .
+    docker build -f sources.Dockerfile -t intel/dlstreamer-pipeline-server:2025.2.0-sources .
   ```
 
   Run the following command to view the directory structure of source code for distributed GPL/LGPL/AGPL components:
   ```sh
-    docker run intel/dlstreamer-pipeline-server:3.1.0-sources
+    docker run intel/dlstreamer-pipeline-server:2025.2.0-sources
   ```
 ---
 
 ## Troubleshooting
-- [Troubleshooting Guide](docs/user-guide/troubleshooting-guide.md)
+- [Troubleshooting](./docs/user-guide/troubleshooting.md)
 
 ---
 ## Learn More
 
--   Understand the components, services, architecture, and data flow, in the [Overview](https://docs.openedgeplatform.intel.com/edge-ai-libraries/dlstreamer-pipeline-server/main/user-guide/Overview.html)
--   For more details on advanced configuration, usage of features refer to [Advanced User Guide](https://docs.openedgeplatform.intel.com/edge-ai-libraries/dlstreamer-pipeline-server/main/user-guide/advanced-guide/Overview.html).
--   For more tutorials refer [here](https://docs.openedgeplatform.intel.com/edge-ai-libraries/dlstreamer-pipeline-server/main/user-guide/get-started.html)
+-   Understand the components, services, architecture, and data flow, in the [Overview](https://docs.openedgeplatform.intel.com/dev/edge-ai-libraries/dlstreamer-pipeline-server/index.html)
+-   For more details on advanced configuration, usage of features refer to [Advanced User Guide](https://docs.openedgeplatform.intel.com/dev/edge-ai-libraries/dlstreamer-pipeline-server/advanced-guide/Overview.html).
+-   For more tutorials refer [here](https://docs.openedgeplatform.intel.com/dev/edge-ai-libraries/dlstreamer-pipeline-server/get-started.html)

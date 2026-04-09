@@ -1,95 +1,127 @@
 # Get Started
 
 The **Visual Pipeline and Platform Evaluation Tool** helps hardware decision-makers and software developers
-select the optimal Intel® platform by adjusting workload parameters and analyzing the provided performance metrics.
-Through its intuitive web-based interface, users can run the Smart NVR pipeline and evaluate key metrics such as
-throughput, CPU and GPU metrics, enabling them to assess platform performance and determine the ideal sizing for
-their needs.
+select the optimal Intel® platform by adjusting workload parameters and analyzing performance metrics.
+Through an intuitive web-based interface, the Smart NVR pipeline can be executed and key metrics such as
+throughput and CPU/GPU utilization can be evaluated to assess platform performance and determine appropriate
+system sizing.
 
-By following this guide, you will learn how to:
+By following this guide, the following tasks can be completed:
 
-- **Set up the sample application**: Use Docker Compose tool to quickly deploy the application in your environment.
+- **Set up the sample application**: Use the Docker Compose tool to quickly deploy the application in a target environment.
 - **Run a predefined pipeline**: Execute the Smart NVR pipeline and observe metrics.
 
 ## Prerequisites
 
-- Verify that your system meets the [minimum requirements](./system-requirements.md).
-- Install Docker platform: [Installation Guide](https://docs.docker.com/get-docker/).
-- Latest NPU Linux drivers [Linux NPU Driver Releases](https://github.com/intel/linux-npu-driver/releases).
+Before starting, ensure the following:
 
-## Set up and First Use
+- **System requirements**: The system meets the [minimum requirements](./get-started/system-requirements.md).
+- **Docker platform**: Docker is installed. For details, see the [Docker installation guide](https://docs.docker.com/get-docker/).
+- **Dependencies installed**:
+  - **Git**: [Install Git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git).
+  - **Make**: Standard build tool, typically provided by the `build-essential` (or equivalent) package on Linux.
+  - **curl**: Command-line tool for transferring data with URLs, typically provided by the `curl` package on Linux.
 
-1. **Set Up Environment Variables**:
-    - Create and navigate to the directory:
+For GPU and/or NPU usage, appropriate drivers must be installed. The recommended method is to use the DLS installation
+script, which detects available devices and installs the required drivers. Follow the **Prerequisites** section in
+[Install Guide Ubuntu – Prerequisites](https://github.com/open-edge-platform/dlstreamer/blob/main/docs/user-guide/get_started/install/install_guide_ubuntu.md#prerequisites)
 
-      ```bash
-      mkdir visual-pipeline-and-platform-evaluation-tool
-      cd visual-pipeline-and-platform-evaluation-tool
-      ```
+This guide assumes basic familiarity with Git commands and terminal usage. For more information, see
+[Git Documentation](https://git-scm.com/doc).
 
-    - Download all required files:
+## Setup
 
-      ```bash
-      curl -LO "https://github.com/open-edge-platform/edge-ai-libraries/raw/refs/heads/main/tools/visual-pipeline-and-platform-evaluation-tool/setup_env.sh"
-      curl -LO "https://github.com/open-edge-platform/edge-ai-libraries/raw/refs/heads/main/tools/visual-pipeline-and-platform-evaluation-tool/compose.yml"
-      curl -LO "https://github.com/open-edge-platform/edge-ai-libraries/raw/refs/heads/main/tools/visual-pipeline-and-platform-evaluation-tool/Makefile"
-      curl -LO "https://github.com/open-edge-platform/edge-ai-libraries/raw/refs/heads/main/tools/visual-pipeline-and-platform-evaluation-tool/models.sh"
-      chmod +x models.sh
-      ```
+Follow the steps below to quickly set up the environment and start
+the Visual Pipeline and Platform Evaluation Tool.
+For alternative ways to set up the sample application, refer to
+[How to Build from Source](./get-started/build-from-source.md)
 
-2. **Start the Application**:
-    - Set the appropriate device type (CPU, GPU, or NPU) and run the following command:
+1. **Set up the working directory**:
 
-      ```bash
-      make run DEVICE_TYPE=<CPU/GPU/NPU>
-      ```
+   ```bash
+   mkdir -p visual-pipeline-and-platform-evaluation-tool/models
+   mkdir -p visual-pipeline-and-platform-evaluation-tool/onvif_discovery
+   mkdir -p visual-pipeline-and-platform-evaluation-tool/shared/models
+   mkdir -p visual-pipeline-and-platform-evaluation-tool/shared/videos
+   mkdir -p visual-pipeline-and-platform-evaluation-tool/shared/onvif
+   cd visual-pipeline-and-platform-evaluation-tool
+   ```
 
-3. **Verify the Application**:
-    - Check that the application is running:
+2. **Download all required files**:
 
-      ```bash
-      docker compose ps
-      ```
+   ```bash
+   curl -LO "https://github.com/open-edge-platform/edge-ai-libraries/raw/refs/heads/release-2026.0.0/tools/visual-pipeline-and-platform-evaluation-tool/setup_env.sh"
+   curl -LO "https://github.com/open-edge-platform/edge-ai-libraries/raw/refs/heads/release-2026.0.0/tools/visual-pipeline-and-platform-evaluation-tool/compose.yml"
+   curl -LO "https://github.com/open-edge-platform/edge-ai-libraries/raw/refs/heads/release-2026.0.0/tools/visual-pipeline-and-platform-evaluation-tool/compose.cpu.yml"
+   curl -LO "https://github.com/open-edge-platform/edge-ai-libraries/raw/refs/heads/release-2026.0.0/tools/visual-pipeline-and-platform-evaluation-tool/compose.gpu.yml"
+   curl -LO "https://github.com/open-edge-platform/edge-ai-libraries/raw/refs/heads/release-2026.0.0/tools/visual-pipeline-and-platform-evaluation-tool/compose.npu.yml"
+   curl -LO "https://github.com/open-edge-platform/edge-ai-libraries/raw/refs/heads/release-2026.0.0/tools/visual-pipeline-and-platform-evaluation-tool/Makefile"
+   curl -Lo models/Dockerfile "https://github.com/open-edge-platform/edge-ai-libraries/raw/refs/heads/release-2026.0.0/tools/visual-pipeline-and-platform-evaluation-tool/models/Dockerfile"
+   curl -Lo models/model_manager.sh "https://github.com/open-edge-platform/edge-ai-libraries/raw/refs/heads/release-2026.0.0/tools/visual-pipeline-and-platform-evaluation-tool/models/model_manager.sh"
+   curl -Lo onvif_discovery/Dockerfile "https://github.com/open-edge-platform/edge-ai-libraries/raw/refs/heads/release-2026.0.0/tools/visual-pipeline-and-platform-evaluation-tool/onvif_discovery/Dockerfile"
+   curl -Lo onvif_discovery/onvif_discovery_agent.py "https://github.com/open-edge-platform/edge-ai-libraries/raw/refs/heads/release-2026.0.0/tools/visual-pipeline-and-platform-evaluation-tool/onvif_discovery/onvif_discovery_agent.py"
+   curl -Lo shared/videos/default_recordings.yaml "https://github.com/open-edge-platform/edge-ai-libraries/raw/refs/heads/release-2026.0.0/tools/visual-pipeline-and-platform-evaluation-tool/shared/videos/default_recordings.yaml"
+   curl -Lo shared/models/supported_models.yaml "https://github.com/open-edge-platform/edge-ai-libraries/raw/refs/heads/release-2026.0.0/tools/visual-pipeline-and-platform-evaluation-tool/shared/models/supported_models.yaml"
+   chmod +x models/model_manager.sh
+   chmod +x setup_env.sh
+   ```
 
-4. **Access the Application**:
-    - Open a browser and go to `http://localhost:7860/?__theme=light` to access the application UI.
+3. **Start the application**:
 
-    - **Expected Results**:
-      - The microservice’s UI loads successfully.
-      - The Smart NVR or Simple VS pipeline is automatically executed when the "Run" button is clicked, and the
-        output video is shown with device metrics.
+   ```bash
+   make build-onvif-discovery build-models run
+   ```
+
+4. **Verify that the application is running**:
+
+   ```bash
+   docker compose ps
+   ```
+
+5. **Access the application**:
+
+   - Open a browser and navigate to `http://localhost` (or `http://<HOST-IP>`) to access
+     the Visual Pipeline and Platform Evaluation Tool.
+
+6. **Access the application API documentation**:
+
+   - Open a browser and navigate to `http://localhost/api/v1/docs` (or `http://<HOST-IP>/api/v1/docs`)
+     to access the Swagger UI.
 
 ## Validation
 
-1. **Verify Build Success**:
-   - Check the logs. Look for confirmation messages indicating that the microservice has started successfully.
+**Verify build success**:
+Check the logs and look for confirmation messages indicating that the microservice has started successfully.
 
-## Advanced Setup Options
+### Model Installation and Management
 
-For alternative ways to set up the sample application, see:
+When the Visual Pipeline and Platform Evaluation Tool is launched for the first time,
+a prompt is displayed to select and install the models to be used.
+This step allows installation of only the models relevant to the intended pipelines.
 
-- [How to Build from Source](./how-to-build-source.md)
+To manage the installed models again, run the following command:
 
-### Known Issues
+```bash
+make install-models-force
+```
 
-- **Issue 1**: The Visual Pipeline and Platform Evaluation Tool container fails to start the analysis when the "Run"
-  button is clicked in the UI, specifically for systems without GPU. This results in the analysis process either
-  failing or becoming unresponsive for users without GPU hardware.
-  - **Solution**: To avoid this issue, consider upgrading the hardware to meet the required specifications for
-    optimal performance.
+### Video Generation
 
-## Troubleshooting
-
-1. **Containers Not Starting**:
-   - Check the Docker logs for errors:
-
-     ```bash
-     docker compose logs
-     ```
-
-2. **Port Conflicts**:
-   - Update the `ports` section in the Docker Compose file to resolve conflicts.
+The Visual Pipeline and Platform Evaluation Tool enables you to create
+composite videos from multiple images stored in subdirectories. For more details, refer to
+[the guide](./how-to-guides/use-video-generator.md).
 
 ## Supporting Resources
 
 - [Docker Compose Documentation](https://docs.docker.com/compose/)
+- [Troubleshooting](./troubleshooting.md)
+
+<!--hide_directive
+:::{toctree}
+:hidden:
+
+./get-started/system-requirements
+./get-started/build-from-source
+
+:::
+hide_directive-->

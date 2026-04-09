@@ -1,5 +1,16 @@
 # EtherCAT Master Stack
 
+<!--hide_directive
+<div class="component_card_widget">
+  <a class="icon_github" href="https://github.com/open-edge-platform/edge-ai-libraries/tree/main/libraries/edge-control-libraries/fieldbus/ethercat-masterstack">
+     GitHub
+  </a>
+  <a class="icon_document" href="https://github.com/open-edge-platform/edge-ai-libraries/blob/main/libraries/edge-control-libraries/fieldbus/ethercat-masterstack/README.md">
+     Readme
+  </a>
+</div>
+hide_directive-->
+
 ## Introduction
 
 The EtherCAT master stack by IgH* is used for open source projects for automation of systems such as Robot Operating System (ROS) and Linux* CNC. Applications of an open source–based EtherCAT master system reduces cost and makes application program development flexible.
@@ -13,15 +24,14 @@ Based on the native, Intel® made the following optimizations:
 * Support user-mode runtime
 * Support multiple master
 
-For User-space EtherCAT Master Stack, please visit [Userspace EtherCAT Master Stack](docs/igh_userspace.md) for details.
+For User-space EtherCAT Master Stack, please visit [Userspace EtherCAT Master Stack](https://github.com/open-edge-platform/edge-ai-libraries/blob/main/libraries/edge-control-libraries/fieldbus/ethercat-masterstack/docs/igh_userspace.md) for details.
 
 ## Architecture Overview
 
 The architecture is as following:
 
-<p>
-    <img src="docs/images/igh_arch.png" alt="EtherCAT Master Stack Architecture" title="EtherCAT Master Stack Architecture" style="height:65%;width:65%;">
-</p>
+!["EtherCAT Master Stack Architecture"](./docs/images/igh_arch.png)
+
 
 Three key blocks have been introduced to support the core architecture:
 * **Master Module** is as Kernel module containing one or more EtherCAT master instances, the 'Device interface' and the 'Application Interface'.
@@ -56,7 +66,7 @@ Run the script ``install_etherlab_patched.sh`` to apply optimizated patches in `
 
 ### Building EtherCAT Stack
 
-EtherCAT Master Stack includes master and device modules and support to build as out-of-tree kernel modules that are not part of the linux kenrel source tree. It requires to specific kernel source dir with ``--with-linux-dir`` to be compatible with the specific kernel version and configuration of the kernel, ensure that the module interfaces correctly with the kernel's internal APIs and data structures. 
+EtherCAT Master Stack includes master and device modules and support to build as out-of-tree kernel modules that are not part of the linux kenrel source tree. It requires to specific kernel source dir with ``--with-linux-dir`` to be compatible with the specific kernel version and configuration of the kernel, ensure that the module interfaces correctly with the kernel's internal APIs and data structures.
 
 So that, linux kernel source need to be compiled with configuation of the kernel, and use ``--with-linux-dir`` to specific kernel directory.
 Recommend using environment variables ``kernel_source_dir`` to configure it.
@@ -85,7 +95,7 @@ which Following with below commands to build EtherCAT Master Stack:
    make modules all
 ```
 
-**Note:** If you need DKMS to compile ``master`` and ``device`` modules, please refer to [How to build EtherCAT with DKMS](docs/igh_dkms.md)
+**Note:** If you need DKMS to compile ``master`` and ``device`` modules, please refer to [How to build EtherCAT with DKMS](https://github.com/open-edge-platform/edge-ai-libraries/blob/main/libraries/edge-control-libraries/fieldbus/ethercat-masterstack/docs/igh_dkms.md)
 
 ### Installing The Software
 
@@ -99,25 +109,19 @@ The below commands have to entered as root, which will install the EtherCAT head
 
 ### Configuring EtherCAT Device
 
-A mandatory ``ethercat`` file installed in ``/etc/sysconfig/``. The ``ethercat`` file contains the configuration variables needed to operate one or more masters. 
+A mandatory ``ethercat`` file installed in ``/etc/sysconfig/``. The ``ethercat`` file contains the configuration variables needed to operate one or more masters.
 Do the following to configure it:
 
-<p>
-    <img src="docs/images/ethercat_sysconfig.png" style="height:45%;width:45%;">
-</p>
+![Ethernet SysConfig](./docs/images/ethercat_sysconfig.png)
 
 * Set **REBIND_NICS**. Use ``lspci`` to query net devices. One of the devices might be specified as an EtherCAT network interface.
 
-<p>
-    <img src="docs/images/lspci.png" style="height:45%;width:45%;">
-</p>
+![lspci](./docs/images/lspci.png)
 
 * Fill the MAC address for **MASTER0_DEVICE**.
 Get the MAC address of the Network Interface Controllers (NICs) selected for EtherCAT.
 
-<p>
-    <img src="docs/images/ifconfig.png" style="height:45%;width:45%;">
-</p>
+![ifconfig](./docs/images/ifconfig.png)
 
 **Note:** EtherCAT Master Stack supports dual master configuration. To configure a secondary master, fill the MAC address for **MASTER1_DEVICE** and add PCI address in **REBIND_NICS**.
 
@@ -149,7 +153,7 @@ Get the MAC address of the Network Interface Controllers (NICs) selected for Eth
 
 ### Start Master as Service
 
-After the ``init`` script and the ``sysconfig`` file are ready to configure, and are placed in the right location, the EtherCAT master can be inserted as a service. You can use the ``init`` script to manually start and stop the EtherCAT master. Execute the ``init`` script with one of the following parameters: 
+After the ``init`` script and the ``sysconfig`` file are ready to configure, and are placed in the right location, the EtherCAT master can be inserted as a service. You can use the ``init`` script to manually start and stop the EtherCAT master. Execute the ``init`` script with one of the following parameters:
 
 | Operation                  | Command                                      |
 |----------------------------|----------------------------------------------|
@@ -159,7 +163,6 @@ After the ``init`` script and the ``sysconfig`` file are ready to configure, and
 | Status of EtherCAT Master  | ```/etc/init.d/ethercat status```            |
 
 ### Makefile Template for EtherCAT application
--------------------------------------------
 
 Provided below are some Makefile templates for EtherCAT application. These templates are provided to build EtherCAT application without ``Makefile.am``.
 
@@ -169,18 +172,18 @@ Provided below are some Makefile templates for EtherCAT application. These templ
       CC     = gcc
       CFLAGS = -Wall -O3 -g -D_GNU_SOURCE -D_REENTRANT -fasynchronous-unwind-tables
       LIBS   = -lm -lrt -lpthread -lethercat -Wl,--no-as-needed -L/usr/lib
-      
+
       TARGET = test
       SRCS   = $(wildcard *.c)
-      
+
       OBJS   = $(SRCS:.c=.o)
-      
+
       $(TARGET):$(OBJS)
               $(CC) -o $@ $^ $(LIBS)
-      
+
       clean:
               rm -rf $(TARGET) $(OBJS)
-      
+
       %.o:%.c
               $(CC) $(CFLAGS) -o $@ -c $<
 ```
@@ -191,18 +194,18 @@ Provided below are some Makefile templates for EtherCAT application. These templ
       CC     = gcc
       CFLAGS = -Wall -O3 -g -I/usr/include/xenomai/cobalt -I/usr/include/xenomai -D_GNU_SOURCE -D_REENTRANT -fasynchronous-unwind-tables -D__COBALT__ -D__COBALT_WRAP__
       LIBS   = -lm -lrt -lpthread -lethercat_rtdm -Wl,--no-as-needed -Wl,@/usr/lib/cobalt.wrappers -Wl,@/usr/lib/modechk.wrappers  /usr/lib/xenomai/bootstrap.o -Wl,--wrap=main -Wl,--dynamic-list=/usr/lib/dynlist.ld -L/usr/lib -lcobalt -lmodechk
-      
+
       TARGET = test
       SRCS   = $(wildcard *.c)
-      
+
       OBJS   = $(SRCS:.c=.o)
-      
+
       $(TARGET):$(OBJS)
               $(CC) -o $@ $^ $(LIBS)
-      
+
       clean:
               rm -rf $(TARGET) $(OBJS)
-      
+
       %.o:%.c
               $(CC) $(CFLAGS) -o $@ -c $<
 ```

@@ -2,8 +2,8 @@
 
 This section shows how to build the Document Summarization Sample Application from the source.
 
-> **Note:** 
-> - The build instruction is applicable only on an Ubuntu system. Build from source is not supported for the sample application on [Edge Microvisor Toolkit (EMT)](https://github.com/open-edge-platform/edge-microvisor-toolkit). The user is recommended to use prebuilt images on EMT. 
+> **Note:**
+> - The build instruction is applicable only on an Ubuntu system. Build from source is not supported for the sample application on [Edge Microvisor Toolkit](https://github.com/open-edge-platform/edge-microvisor-toolkit). It is recommended to use prebuilt images on Edge Microvisor Toolkit.
 
 ## Prerequisites
 
@@ -16,7 +16,10 @@ Before you begin, ensure that you have the following prerequisites:
 1. **Clone the Repository**:
     - Clone the Document Summarization Sample Application repository:
       ```bash
+      # Clone the latest on mainline
       git clone https://github.com/open-edge-platform/edge-ai-libraries.git edge-ai-libraries
+      # Alternatively, Clone a specific release branch
+      git clone https://github.com/open-edge-platform/edge-ai-libraries.git edge-ai-libraries -b <release-tag>
       ```
       **Note**: Adjust the repo link appropriately in case of forked repo.
 
@@ -25,7 +28,7 @@ Before you begin, ensure that you have the following prerequisites:
       ```bash
       cd edge-ai-libraries/sample-applications/document-summarization
       ```
-	  
+
 3. **Set Up Environment Variables**:
     - Set up the following environment variables:
 
@@ -36,7 +39,7 @@ Before you begin, ensure that you have the following prerequisites:
 
       # Docker Image Registry Configuration
       export REGISTRY="intel/"
-      export TAG=1.0.1
+      export TAG=latest
       ```
 
       To run a **GATED MODEL** like Llama models, the user will need to pass their [huggingface token](https://huggingface.co/docs/hub/security-tokens#user-access-tokens). The user will need to request access to specific model by going to the respective model page on HuggingFace.
@@ -57,7 +60,7 @@ Before you begin, ensure that you have the following prerequisites:
       >  export OTLP_ENDPOINT=<OTLP-endpoint>
       >  export no_proxy=${no_proxy},$OTLP_ENDPOINT,
       >   ```
-      
+
     - Run the following script to set up the rest of the environment:
 
         ```bash
@@ -75,15 +78,15 @@ Before you begin, ensure that you have the following prerequisites:
       ```bash
       docker compose up
       ```
-      
+
     - This will start:
-     
+
         - The OVMS service for model serving (gRPC: port 9300, REST: port 8300)
-        
+
         - The FastAPI backend service (port 8090)
-        
+
         - The Gradio UI service (port 9998)
-        
+
         - The nginx (port 8101)
 
 6. **Access the Application**:

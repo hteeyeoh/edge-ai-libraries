@@ -1,22 +1,38 @@
 // Copyright (C) 2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
-
 import { createSelector, createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { OpenPromptModal, UISliceState } from './ui.model';
+import { MuxFeatures, OpenPromptModal, UISliceState } from './ui.model';
 import { RootState } from '../store';
+import { SearchAdd } from '../search/searchSlice';
+import { FEATURE_SEARCH, FEATURE_SUMMARY } from '../../config';
+import { FEATURE_STATE } from '../../utils/constant';
+
+// Determine initial mux based on feature flags
+const getInitialMux = (): MuxFeatures => {
+  const hasSearch = FEATURE_SEARCH === FEATURE_STATE.ON;
+  const hasSummary = FEATURE_SUMMARY === FEATURE_STATE.ON;
+  
+  // If only search is enabled, default to search
+  if (hasSearch && !hasSummary) {
+    return MuxFeatures.SEARCH;
+  }
+  
+  // Otherwise default to summary
+  return MuxFeatures.SUMMARY;
+};
 
 export const initialState: UISliceState = {
   promptEditing: null,
+  selectedMux: getInitialMux(),
+  groupByTag: false,
+  showVideoGroups: false,
 };
 
 export const UISlice = createSlice({
   name: 'ui',
   initialState,
   reducers: {
-    openPromptModal: (
-      state: UISliceState,
-      action: PayloadAction<OpenPromptModal>,
-    ) => {
+    openPromptModal: (state: UISliceState, action: PayloadAction<OpenPromptModal>) => {
       const { heading, openToken, prompt } = action.payload;
 
       const vars: Set<string> = new Set();
@@ -45,9 +61,33 @@ export const UISlice = createSlice({
       }
     },
 
+    setMux: (state: UISliceState, action: PayloadAction<MuxFeatures>) => {
+      state.selectedMux = action.payload;
+    },
+
     closePrompt: (state: UISliceState) => {
       state.promptEditing = null;
     },
+
+    toggleGroupByTag: (state: UISliceState) => {
+      state.groupByTag = !state.groupByTag;
+      state.showVideoGroups = state.groupByTag;
+    },
+
+    toggleVideoGroups: (state: UISliceState) => {
+      state.showVideoGroups = !state.showVideoGroups;
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(SearchAdd.pending, (state) => {
+        state.showVideoGroups = false;
+        state.groupByTag = false;
+      })
+      .addCase(SearchAdd.fulfilled, (state) => {
+        state.showVideoGroups = false;
+        state.groupByTag = false;
+      });
   },
 });
 
@@ -59,6 +99,9 @@ export const uiSelector = createSelector([selectUIState], (uiState) => ({
   modalHeading: uiState.promptEditing?.heading ?? '',
   modalPrompt: uiState.promptEditing?.prompt ?? '',
   modalPromptVars: uiState.promptEditing?.vars ?? [],
+  selectedMux: uiState.selectedMux,
+  groupByTag: uiState.groupByTag,
+  showVideoGroups: uiState.showVideoGroups,
 }));
 
 export const UIReducer = UISlice.reducer;

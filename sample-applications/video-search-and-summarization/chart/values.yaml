@@ -1,39 +1,71 @@
 global:
-  huggingface:
-    apiToken: <huggingface-api-token> # Set this during installation
-  proxy:
-    no_proxy: "localhost,127.0.0.1,192.168.0.0/16,172.16.0.0/12,127.0.0.0/8,10.0.0.0/8,.svc.cluster.local"
-    http_proxy: ""
-    https_proxy: ""
+  # Set this value to hostPath where we want to mount a volume (Used in single node cluster or standalone sub-chart installation).
+  volumeHostPath: "/mnt/vss-data"
+
+  # usePvc should be set to true to use a new PVC for storage required by any of the subchart.
+  usePvc: false
+
+  # keepPvc should be set to true to retain the PVC after uninstalling the chart.
+  keepPvc: false
+
+  # sharedPvcName is the PVC shared by VDMS Dataprep and Multimodel-Embedding-MS subcharts.
+  sharedPvcName: "vss-shared-pvc"
+
+  # huggingfaceToken should be set during installation if gated models need to be accessed.
+  huggingfaceToken: ""
+
+  # vdmsIndexName is the DB Index or DB Collection name used by VDMS Vector DB.
+  vdmsIndexName: ""
 
   # vlmName is Vision-Language Model Name used by VLM Inference Microservice
   vlmName: ""
   # llmName is Large Language Model Name used by OVMS service
   llmName: ""
 
+  gpu:
+    vlminferenceEnabled: false
+    multimodalembeddingmsEnabled: false
+    vdmsdataprepEnabled: false
+    ovmsEnabled: false
+
+    key:
+    device:
+    group_add: $(stat -c "%g" /dev/dri/render*)
+
+  proxy:
+    no_proxy: "localhost,127.0.0.1,192.168.0.0/16,172.16.0.0/12,127.0.0.0/8,10.0.0.0/8,.svc.cluster.local"
+    http_proxy: ""
+    https_proxy: ""
   env:
-    UI_NODEPORT: 31998
-    POSTGRES_USER:
-    POSTGRES_PASSWORD:
-    POSTGRES_DB:
-    MINIO_ROOT_USER:
-    MINIO_PROTOCOL: "http:"
-    MINIO_BUCKET:
-    MINIO_ROOT_PASSWORD:
-    RABBITMQ_DEFAULT_USER:
-    RABBITMQ_DEFAULT_PASS:
+    POSTGRES_DB: video_summary_db
+    POSTGRES_USER: ""
+    POSTGRES_PASSWORD: ""
+    MINIO_ROOT_USER: ""
+    MINIO_ROOT_PASSWORD: ""
+    RABBITMQ_DEFAULT_USER: ""
+    RABBITMQ_DEFAULT_PASS: ""
     OTLP_ENDPOINT: ""
     OTLP_ENDPOINT_TRACE: ""
+    DEFAULT_BUCKET_NAME: "video-summary"
+    MULTIMODAL_EMBEDDING_ENDPOINT: "http://multimodal-embedding-ms:8000/embeddings"
+    EMBEDDING_MODEL_NAME: ""
+    TEXT_EMBEDDING_MODEL_NAME: ""
+    EMBEDDING_PROCESSING_MODE: "sdk"
+    SDK_USE_OPENVINO: true
+    VDMS_DATAPREP_DEVICE: "CPU"
+    DEVICE: "CPU"
+    OV_MODELS_DIR: "/app/ov_models"
+    OV_PERFORMANCE_MODE: "THROUGHPUT"
+    VDMS_DATAPREP_LOG_LEVEL: "INFO"
     keeppvc: false # Set to true to keep PVCs after uninstalling the chart
+  embedding:
+    preferTextModel: false
 
-videosummaryui:
-  name: videosummaryui
-  service:
-    type: ClusterIP
-    port: 8100
-    targetPort: 80
+# sharedClaimSize is the storage size claimed by shared PVC used by VDMS Dataprep and Multimodal-Embedding-MS subcharts.
+sharedClaimSize: "7Gi"
 
 rabbitmq:
+  enabled: false
   name: rabbitmq
   fullname: rabbitmq
   service:
@@ -43,23 +75,28 @@ rabbitmq:
     managementPort: 15672
     mqttPort: 1883
 
-minioServer:
-  name: minio-server
+minioserver:
+  claimSize: "5Gi"
   service:
-    type: ClusterIP
-    port: 9000
-    targetPort: 9000
+    apiPort: 9000
 
-videoSummaryManager:
-  name: videosummarybackend
+pipelinemanager:
+  name: pipelinemanager
+  aliasServiceName: pipeline-manager
+  securityContext:
+    privileged: true
+    runAsUser: 0
+    runAsGroup: 0
   image:
     repository: intel/pipeline-manager
-    tag: 1.2.0
+    tag: "latest"
     pullPolicy: IfNotPresent
+  containerPortName: videosumm-port # Optional name to refer containerPort
   service:
     type: ClusterIP
-    port: 3000
-    targetPort: 3000
+    port: 80 # Port on which service listens for incoming connection, if exposed externally
+  minioProtocol: "http:"
+  minioBucket: "video-search-summary"
   env:
     LLM_SUMMARIZATION_KEY: ""
     LLM_SUMMARIZATION_DEVICE: "CPU"
@@ -67,13 +104,17 @@ videoSummaryManager:
     VLM_CAPTIONING_DEVICE: "CPU"
     LLM_CONCURRENT: "2"
     VLM_CONCURRENT: "4"
+    TICK_INTERVAL_MS: "5000" # EVAM uses TICK
+    FAST_TICK_INTERVAL_MS: "2000" # VLM/LLM uses FAST_TICK
     SUMMARIZATION_MAX_COMPLETION_TOKENS: "4000"
     CAPTIONING_MAX_COMPLETION_TOKENS: "1024"
+    MAX_CONTEXT_LENGTH: "90000"
     LLM_MODEL_API: "v1/config"
     MULTI_FRAME_COUNT: "12"
     AUDIO_DEVICE: "cpu"
     OTLP_TRACE_URL: ""
     USE_OVMS: "CONFIG_OFF"
+    USE_VLLM: "CONFIG_OFF"
     SUMMARY_FEATURE: "FEATURE_ON"
     SEARCH_FEATURE: "FEATURE_OFF"
   nodeSelector: {}
@@ -83,6 +124,7 @@ videoSummaryManager:
 audioanalyzer:
   enabled: false
   name: audioanalyzer
+  claimSize: "3Gi"
   service:
     port: 8000
     targetPort: 8000
@@ -93,6 +135,11 @@ videoingestion:
   name: videoingestion
   fullnameOverride: videoingestion
   fullname: videoingestion
+  claimSize: "2Gi"
+  # odModelName defines the name of Object Detection Model
+  odModelName: ""
+  # odModelType defines the type of Object Detection Model. e.g., "yolo_v8"
+  odModelType: ""
   service:
     type: ClusterIP
     port: 8080
@@ -100,38 +147,46 @@ videoingestion:
 ovms:
   name: ovms
   enabled: false
+  claimSize: "6Gi"
   service:
     port: 8300
 
 vlminference:
   enabled: false
   name: vlm-inference-microservice
+  claimSize: "40Gi"
+
+vllm:
+  enabled: false
+  service:
+    name: cpu-vllm-service
+    type: ClusterIP
+    port: 80
 
 # Add nginx configuration
 nginx:
   name: video-summary-nginx
+  containerPortName: nginx-port
   service:
     type: NodePort
     port: 80
-    targetPort: 80
-    nodePort: 31999
   affinity:
     nodeAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
-        - matchExpressions:
-          - key: kubernetes.io/ready
-            operator: In
-            values:
-            - "true"
+          - matchExpressions:
+              - key: kubernetes.io/ready
+                operator: In
+                values:
+                  - "true"
 
 postgresql:
   name: postgresql
   fullname: postgresql
+  claimSize: "5Gi"
   service:
     type: ClusterIP
     port: 5432
-
 
 # Placeholder for multimodal-embedding-ms subchart
 multimodalembeddingms:
@@ -140,6 +195,9 @@ multimodalembeddingms:
   service:
     type: ClusterIP
     port: 8000
+  modelPvc:
+    enabled: true
+    size: "10Gi"
 
 # Placeholder for vdms-dataprep subchart
 vdmsdataprep:
@@ -148,11 +206,15 @@ vdmsdataprep:
   service:
     type: ClusterIP
     port: 8000
+  modelPvc:
+    enabled: true
+    size: "10Gi"
 
 # Placeholder for vdms-vectordb subchart
 vdmsvectordb:
   enabled: false
   name: vdms-vectordb
+  claimSize: "8Gi"
   service:
     type: ClusterIP
     port: 55555
@@ -164,3 +226,22 @@ videosearch:
   service:
     type: ClusterIP
     port: 8000
+
+vsscollector:
+  enabled: false
+  name: vss-collector
+  image:
+    repository: docker.io/intel/vippet-collector
+    tag: "2025.2.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 9273
+  websocketPath: "/metrics/ws/collector"
+  websocketUrl: ""
+  signalVolume:
+    subPath: collector-signals
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}

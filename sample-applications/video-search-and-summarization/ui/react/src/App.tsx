@@ -1,4 +1,6 @@
-import { useEffect, type FC } from 'react';
+// Copyright (C) 2025 Intel Corporation
+// SPDX-License-Identifier: Apache-2.0
+import { useEffect, useRef, type FC } from 'react';
 
 import NotificationList from './components/Notification/NotificationList.tsx';
 import MainPage from './components/MainPage/MainPage.tsx';
@@ -16,23 +18,33 @@ import {
 } from './redux/summary/summary.ts';
 import { VideoFramesAction } from './redux/summary/videoFrameSlice.ts';
 import { VideoChunkActions } from './redux/summary/videoChunkSlice.ts';
-import { FEATURE_MUX } from './config.ts';
-import { FeatureMux } from './utils/constant.ts';
+import { FEATURE_MUX, FEATURE_SEARCH } from './config.ts';
+import { FEATURE_STATE, FeatureMux } from './utils/constant.ts';
+import { SearchActions } from './redux/search/searchSlice.ts';
+import { SearchQuery } from './redux/search/search.ts';
+import { useDocumentTitle } from './hooks/useDocumentTitle.ts';
 
 const App: FC = () => {
   const { summaryIds } = useAppSelector(SummarySelector);
+  
+  // Use the custom hook to manage document title
+  useDocumentTitle();
 
   const dispatch = useAppDispatch();
 
-  const connectedSockets: Set<string> = new Set<string>();
+  const connectedSocketsRef = useRef<Set<string>>(new Set<string>());
+  const searchListenerAttachedRef = useRef(false);
+  const connectionLoggedRef = useRef(false);
 
   useEffect(() => {
-    if (!FeatureMux.hasOwnProperty(FEATURE_MUX)) {
+    if (!Object.keys(FeatureMux).includes(FEATURE_MUX)) {
       throw new Error(`Feature Mux ${FEATURE_MUX} is not supported`);
     }
   });
 
   useEffect(() => {
+    const connectedSockets = connectedSocketsRef.current;
+
     if (summaryIds.length > 0) {
       for (const summaryId of summaryIds) {
         if (!connectedSockets.has(summaryId)) {
@@ -42,7 +54,7 @@ const App: FC = () => {
 
           socket.emit('join', summaryId);
 
-          const prefix = `sync/${summaryId}`;
+          const prefix = `summary:sync/${summaryId}`;
 
           socket.on(`${prefix}/status`, (statusData: UIStateStatus) => {
             dispatch(
@@ -94,7 +106,7 @@ const App: FC = () => {
           });
 
           // socket.on(
-          //   `sync/${summaryId}/summaryStream`,
+          //   `summary:sync/${summaryId}/summaryStream`,
           //   (data: SummaryStreamChunk) => {
           //     dispatch(SummaryActions.updateSummaryChunk(data));
           //   },
@@ -102,7 +114,27 @@ const App: FC = () => {
         }
       }
     }
-  }, [summaryIds]);
+    if (!connectionLoggedRef.current) {
+      socket.on('connect', () => {
+        console.log('[socket] connected', socket.id);
+      });
+      socket.on('connect_error', (err) => {
+        console.error('[socket] connect_error', err.message || err);
+      });
+      socket.on('disconnect', (reason) => {
+        console.warn('[socket] disconnected', reason);
+      });
+      connectionLoggedRef.current = true;
+    }
+
+    if (!searchListenerAttachedRef.current && FEATURE_SEARCH !== FEATURE_STATE.OFF) {
+      socket.on('search:update', (data: SearchQuery) => {
+        console.log('[socket] search:update received', data.queryId);
+        dispatch(SearchActions.updateSearchQuery(data));
+      });
+      searchListenerAttachedRef.current = true;
+    }
+  }, [dispatch, summaryIds]);
 
   return (
     <>

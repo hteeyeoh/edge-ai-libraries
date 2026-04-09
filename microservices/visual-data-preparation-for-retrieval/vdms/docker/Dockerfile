@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 ARG ARCH="cpu"
-FROM python:3.13-slim AS python-base
+ARG INSTALL_DRIVER_VERSION="25.48.36300"
+FROM python:3.12.12-slim AS python-base
 ARG ARCH
 # Setting env vars for python, pip and poetry
 ENV PYTHONUNBUFFERED=1 \
@@ -26,6 +27,10 @@ ENV PYTHONUNBUFFERED=1 \
 # Add poetry and venv to path
 ENV PATH="$PATH:$POETRY_HOME/bin:$VENV_PATH/bin"
 
+# Create non-root user
+RUN groupadd --gid 1000 appuser && \
+    useradd --uid 1000 --gid appuser --shell /bin/bash --create-home appuser
+
 # upgrade pip to the latest version
 RUN pip install --upgrade pip
 
@@ -34,22 +39,31 @@ FROM python-base AS builder-base
 ARG ARCH
 RUN apt-get update && apt-get install --no-install-recommends --fix-missing -y \
     curl \
-    build-essential
+    build-essential \
+    git
 
 # Install poetry. Installs in $POETRY_HOME with version $POETRY_VERSION
 RUN curl -sSL https://install.python-poetry.org | python3 - 
 
 WORKDIR $SETUP_PATH
 COPY poetry.lock pyproject.toml ./
+COPY wheels ./wheels
 
 # Run poetry lock to install build dependencies
 RUN poetry lock --no-update
 
 # Install runtime (prod) deps. Uses $POETRY_VIRTUALENVS_IN_PROJECT to create venv.
 # If value of ARCH is cpu, install with optional cpu dependencies else install main dependencies
-RUN if [ ${ARCH} = "cpu" ]; \
+RUN if [ "${ARCH}" = "cpu" ]; \
     then poetry install --with cpu; \
     else poetry install --only main; fi
+
+# Install additional packages that have dependency conflicts with --no-deps
+# These are required for the multimodal embedding service SDK
+RUN poetry run pip install git+https://github.com/apple/ml-mobileclip.git salesforce-lavis==1.0.2 --no-deps
+
+# Set ownership of poetry and setup directories to appuser
+RUN chown -R appuser:appuser $POETRY_HOME $SETUP_PATH
 
 
 # `dev` image is used during development / testing
@@ -70,15 +84,31 @@ RUN chmod +x /entrypoint.sh
 
 # Source code will be mounted here
 WORKDIR /app
-RUN mkdir -p /tmp/dataprep/videos
+
+# Create temporary directory to store app artifacts. Ownership is changed to appuser later.
+RUN mkdir -p /tmp/dataprep
+
+# Create model directory for persistent storage mount
+RUN mkdir -p /app/models/yolox /app/ov_models
+
+# Set ownership of directories to appuser
+RUN chown -R appuser:appuser /app /tmp/dataprep /entrypoint.sh
+
+# Switch to non-root user
+USER appuser
+
 EXPOSE 8000
 
 ENTRYPOINT [ "/entrypoint.sh" ] 
-CMD [ "poetry", "run", "uvicorn", "--host", "0.0.0.0", "--port", "8000", "--reload", "src.app:app" ]
+CMD [ "poetry", "run", "uvicorn", "--host", "0.0.0.0", "--port", "8000", "--reload", "src.main:app" ]
 
 # Linter stage to lint code in dev image
 FROM dev AS lint
-COPY . .
+
+USER root
+COPY --chown=appuser:appuser . .
+USER appuser
+
 RUN black --config ./pyproject.toml --check tests src
 RUN isort --settings-path ./pyproject.toml --check-only .
 
@@ -90,18 +120,32 @@ RUN coverage report -m --fail-under $COVERAGE_REQ
 
 # Generate test coverage report on lint stage and serve it using python http server.
 FROM lint AS report
-COPY ./scripts/reporter.sh /reporter.sh
+# Copy script with proper ownership from the start
+USER root
+COPY --chown=appuser:appuser ./scripts/reporter.sh /reporter.sh
 RUN chmod +x /reporter.sh
+USER appuser
+
 CMD [ "/reporter.sh" ]
 
 # `prod` image used for runtime
 FROM python-base AS prod
-ENV FASTAPI_ENV=production
+
+ARG INSTALL_DRIVER_VERSION
+
+ENV FASTAPI_ENV=production \
+    INSTALL_DRIVER_VERSION=${INSTALL_DRIVER_VERSION}
+
+# Install curl for health checks and debugging
+RUN apt-get update && apt-get install --no-install-recommends -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder-base $SETUP_PATH $SETUP_PATH
 
-COPY ./scripts/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY ./scripts/ /
+RUN chmod +x /entrypoint.sh /install_ubuntu_gpu_drivers.sh && \
+/install_ubuntu_gpu_drivers.sh
 
 COPY . /app/
 
@@ -125,7 +169,7 @@ RUN if [ "$COPYLEFT_SOURCES" = "true" ]; then \
         # Get source code for installed Python packages with copyleft licenses \
         mkdir -p /copyleft_sources/python && \
         cd /copyleft_sources/python && \
-        apt-get update && apt-get install -y gcc build-essential libffi-dev python3-dev && \
+        apt-get update && apt-get install --no-install-recommends -y gcc build-essential libffi-dev python3-dev && \
         # Download python package sources with relevant licenses \
         pip3 freeze | cut -d= -f1 | while read pkg; do \
             meta=$(pip3 show $pkg 2>/dev/null); \
@@ -137,10 +181,21 @@ RUN if [ "$COPYLEFT_SOURCES" = "true" ]; then \
         done; \
         apt-get remove --purge -y gcc build-essential libffi-dev python3-dev; \
     fi
-    
+
 WORKDIR /app
-RUN mkdir -p /tmp/dataprep/videos
+
+# Create temporary directory to store app artifacts. Ownership is changed to appuser later.
+# Create model directory for persistent storage mount
+RUN mkdir -p /tmp/dataprep /app/models/yolox /app/ov_models /home/appuser/.cache/huggingface
+
+
+# Set ownership of all necessary directories to appuser
+RUN chown -R appuser:appuser /app  /tmp/dataprep /entrypoint.sh /home/appuser/.cache/huggingface
+
+# Switch to non-root user
+USER appuser
+
 EXPOSE 8000
 
 ENTRYPOINT [ "/entrypoint.sh" ]
-CMD ["gunicorn", "-b", "0.0.0.0:8000", "-k", "uvicorn.workers.UvicornWorker", "src.app:app", "--timeout", "300", "--access-logfile", "-"]
+CMD ["gunicorn", "-b", "0.0.0.0:8000", "-k", "uvicorn.workers.UvicornWorker", "src.main:app", "--timeout", "1200", "--log-level", "debug"]

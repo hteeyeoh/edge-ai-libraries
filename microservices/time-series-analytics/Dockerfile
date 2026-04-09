@@ -31,25 +31,14 @@ RUN apt-get update && \
 # Copy kapacitor Python UDF agent files from builder image
 COPY --from=builder /tmp/kapacitor/udf/agent/py /app/kapacitor_python
 
-# Install Intel GPU tools and clean up
-RUN export no_proxy= && \
-    apt-get update && \
-    . /etc/os-release && \
-    if [[ ! "jammy" =~ ${VERSION_CODENAME} ]]; then \
-        echo "Ubuntu version ${VERSION_CODENAME} not supported"; \
-    else \
-        wget --no-check-certificate -qO- https://repositories.intel.com/gpu/intel-graphics.key | gpg --dearmor --output /usr/share/keyrings/gpu-intel-graphics.gpg && \
-        echo "deb [arch=amd64 signed-by=/usr/share/keyrings/gpu-intel-graphics.gpg] https://repositories.intel.com/gpu/ubuntu jammy client" | \
-        tee /etc/apt/sources.list.d/intel-gpu-"${VERSION_CODENAME}".list && \
-        apt-get update; \
-    fi && \
-    apt-get install -y --no-install-recommends \
-    intel-opencl-icd=\* ocl-icd-opencl-dev=\* intel-level-zero-gpu=\* level-zero=\* \
-    libmfx1=\* libmfxgen1=\* libvpl2=\* intel-media-va-driver-non-free=\* \
-    libgbm1=\* libigdgmm12=\* libxatracker2=\* libdrm-amdgpu1=\* \
-    va-driver-all=\* vainfo=\* hwinfo=\* clinfo=\* && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* 
+RUN apt-get update && apt-get install -y libnuma1 ocl-icd-libopencl1 --no-install-recommends && rm -rf /var/lib/apt/lists/* && \
+    mkdir /tmp/gpu_deps && cd /tmp/gpu_deps && \
+	curl --fail -L -O https://github.com/intel/compute-runtime/releases/download/25.13.33276.16/intel-level-zero-gpu_1.6.33276.16_amd64.deb && \
+	curl --fail -L -O https://github.com/intel/compute-runtime/releases/download/25.13.33276.16/intel-opencl-icd_25.13.33276.16_amd64.deb && \
+	curl --fail -L -O https://github.com/intel/compute-runtime/releases/download/25.13.33276.16/libigdgmm12_22.7.0_amd64.deb && \
+	curl --fail -L -O https://github.com/intel/intel-graphics-compiler/releases/download/v2.10.8/intel-igc-core-2_2.10.8+18926_amd64.deb && \
+	curl --fail -L -O https://github.com/intel/intel-graphics-compiler/releases/download/v2.10.8/intel-igc-opencl-2_2.10.8+18926_amd64.deb && \
+	dpkg -i *.deb && rm -Rf /tmp/gpu_deps
 
 ARG TIMESERIES_UID
 ARG TIMESERIES_USER_NAME
@@ -65,18 +54,13 @@ COPY ./requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
 
 # Set environment variables in a single ENV instruction for better layer caching
-ENV PYTHONPATH="$PYTHONPATH:/tmp/py_package:/app/kapacitor_python/" \
-    LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/opt/intel/oneapi/2025.1/lib"
+ENV PYTHONPATH="$PYTHONPATH:/tmp/py_package:/app/kapacitor_python/"
 
 # Adding classifier program
 # Copy Python source files in a single layer for better caching
-COPY ./src/classifier_startup.py ./src/opcua_alerts.py ./src/mr_interface.py ./src/main.py /app/
+COPY ./src/classifier_startup.py ./src/opcua_alerts.py ./src/main.py /app/
 
-# Copy configuration files and directories efficiently
-COPY ./config.json /app/
 COPY ./config/kapacitor*.conf /app/config/
-COPY ./tick_scripts /app/temperature_classifier/tick_scripts/
-COPY ./udfs /app/temperature_classifier/udfs/
 
 # Optionally download copyleft sources if requested
 ARG COPYLEFT_SOURCES=false

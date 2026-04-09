@@ -18,7 +18,7 @@ RUN groupadd -g ${GID} user && \
 
 # Switch to the non-root user
 USER user
-WORKDIR /user/app
+WORKDIR /user/app/
 
 # Copy only necessary files for dependency installation
 COPY package*.json /user/app/
@@ -37,10 +37,10 @@ RUN ["npm", "run", "build"]
 # -----------------------------------------------------------------------------
 # Stage 2: Serve the built app using Nginx (unprivileged)
 # -----------------------------------------------------------------------------
-FROM nginxinc/nginx-unprivileged:1.27.4
+FROM nginxinc/nginx-unprivileged:1.29.5
 
 # Copy the built app from the previous stage
-COPY --from=vite-app /user/app/dist /usr/share/nginx/html
+COPY --from=vite-app /user/app/dist /opt/share/nginx/html
 
 # Copy environment script and custom Nginx configuration
 COPY ./env.sh /docker-entrypoint.d/env.sh

@@ -1,37 +1,72 @@
 global:
-  huggingface:
-    apiToken: 
-  proxy:
-    no_proxy: 
-    http_proxy: 
-    https_proxy:
+  # Set this value to hostPath where we want to mount a volume (Used in single node cluster or standalone sub-chart installation).
+  volumeHostPath: ""
 
+  # usePvc should be set to true to use a PVC for persisting models, cache and other files.
+  usePvc: false
+
+  # keepPvc should be set to true to retain the PVC after uninstalling the chart.
+  keepPvc: false
+
+  # huggingfaceToken should be set during installation if gated models need to be accessed.
+  huggingfaceToken: ""
   # llmName is the Large Language Model used by OVMS
   llmName: ""
 
-  egai_ovms_pvc:
-    size: 40Gi
-    
+  proxy:
+    no_proxy:
+    http_proxy:
+    https_proxy:
+
+# claimSize is the storage size claimed by PVC if usePvc is set to true.
+# claimSize should be set based on the size of models and files expected to be stored.
+claimSize: ""
+
 ovms:
   name: ovms
   image:
     repository: openvino/model_server
-    tag: "2025.1"
+    tag: "2025.3"
+    Gputag: "2025.3-gpu"
     pullPolicy: IfNotPresent
-  readinessProbe:
-    httpGet:
-      path: /v2/health/ready
-      port: 8300
-    initialDelaySeconds: 60
-    periodSeconds: 30
+
+  containerPort: 8300   # Port on which container application listens internally
+  containerPortName: ovms-port    # Optional name to refer containerPort
   service:
     type: ClusterIP
-    port: 8300
-    targetPort: 8300
-  
+    port: 8300    # Port on which service listens for incoming connection, if exposed externally
+    portName: http    # Service port name. Useful when service exposes multiple ports.
+  group_add: $(stat -c "%g" /dev/dri/render*)
   # scriptconfigmap: ovms-configmap.yaml
   env:
     WEIGHT_FORMAT: "fp16"
     model_directory_name: "converted_model"
   script:
     name: "ovms-model-preparation"
+
+livenessProbe:
+  httpGet:
+    path: /v2/health/live
+    port: ovms-port
+  initialDelaySeconds: 10
+  periodSeconds: 20
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /v2/health/ready
+    port: ovms-port
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  failureThreshold: 6
+
+# Wait for startup till max ~ 50Mins
+startupProbe:
+  tcpSocket:
+    port: ovms-port
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  failureThreshold: 300
+
+# Node affinity to schedule pods on specific nodes only
+nodeAffinity: {}

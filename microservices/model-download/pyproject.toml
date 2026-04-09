@@ -1,0 +1,140 @@
+[project]
+name = "model-download"
+version = "1.0.1"
+description = "A FastAPI application for downloading and converting HuggingFace/Ollama/ultralytics/geti models."
+authors = [
+]
+readme = "README.md"
+requires-python = "==3.12.*"
+
+dependencies = [
+    "fastapi==0.121.3",
+    "pydantic==2.12.4",
+    "structlog==25.1.0",
+    "uvicorn==0.38.0",
+    "PyYAML==6.0.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0,<8.0.0",
+    "pytest-cov>=4.1.0,<5.0.0",
+    "pytest-asyncio>=0.21.1,<1.0.0",
+    "httpx>=0.24.1,<1.0.0",
+    "pytest-mock>=3.11.1,<4.0.0",
+    "pytest-env>=1.1.0,<2.0.0",
+    "responses>=0.25.0,<1.0.0",
+    "freezegun>=1.5.0,<2.0.0",
+]
+
+cpu = [
+    "torch==2.9.1+cpu",
+    "torchvision==0.24.1+cpu",
+]
+
+huggingface = [
+    "huggingface-hub[cli,hf-transfer,hf-xet]==0.36.1",
+    "transformers==4.53.3",
+    "torch==2.9.1+cpu",
+    "torchvision==0.24.1+cpu",
+]
+
+ultralytics = [
+    "ultralytics==8.2.3",
+    "torch==2.9.1+cpu",
+    "torchvision==0.24.1+cpu",
+]
+
+openvino = [
+    "huggingface-hub[cli,hf-transfer,hf-xet]==0.36.1",
+    "optimum-intel==1.27.0",
+    "accelerate==1.11.0",
+    "datasets==4.5.0",
+    "diffusers==0.35.2",  # for image generation
+    "einops==0.8.1",
+    "nncf==2.19.0",
+    "numpy==2.2.6",
+    "openvino-tokenizers==2025.4.0.0",
+    "openvino==2025.4.0",
+    "pillow==12.1.1",
+    "sentence-transformers==5.1.2",
+    "sentencepiece==0.2.1",  # Required by: transformers
+    "timm==1.0.22",
+    "torch==2.9.1+cpu",
+    "torchvision==0.24.1+cpu",
+    "transformers==4.53.3",
+]
+
+ollama = [
+    # Ollama is installed as a binary, no Python dependencies required
+]
+
+geti = [
+    "geti-sdk==2.13.0",
+]
+
+hls = [
+    "openvino==2025.4.0",
+    "torch==2.9.1+cpu",
+    "torchvision==0.24.1+cpu",
+    "tensorflow",
+    "tqdm>=4.67",
+]
+
+[tool.uv]
+index-url = "https://pypi.org/simple"
+required-environments = [
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'win32'"
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[tool.uv.pip]
+index-strategy = "unsafe-best-match"
+
+# Pytest configuration - updated for new structure
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --cov=src --cov-report=term-missing --cov-report=html"
+asyncio_mode = "auto"
+env = [
+    "HF_TOKEN=hf_test_token_for_testing",
+    "MODELS_DIR=/tmp/test_models",
+    "LOGS_DIR=/tmp/test_logs",
+]
+
+# Coverage configuration - updated for new structure
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*", 
+    "*/__pycache__/*",
+    "*/conftest.py",
+    "*/test_*.py"
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "pass",
+    "\\.\\.\\.",
+]
+show_missing = true
+skip_covered = false
+
+[tool.coverage.html]
+directory = "htmlcov"
