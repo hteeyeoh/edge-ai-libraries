@@ -1,6 +1,5 @@
 // Copyright (C) 2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
-
 import { Test, TestingModule } from '@nestjs/testing';
 import { AudioQueueService } from './audio-queue.service';
 import { StateService } from '../services/state.service';
@@ -25,6 +24,13 @@ describe('AudioQueueService', () => {
     },
     systemConfig: {
       audioModel: 'whisper-large-v3',
+    },
+    video: {
+      dataStore: {
+        objectName: 'test-state-id',
+        fileName: 'test-video.mp4',
+      },
+      videoId: 'test-state-id',
     },
   };
 

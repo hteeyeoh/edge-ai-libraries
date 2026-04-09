@@ -1,14 +1,20 @@
+{{- if .Values.global.usePvc }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: video-summary-ovms-pvc
-  {{- if .Values.global.env.keeppvc }}
+  {{- if .Values.global.gpu.ovmsEnabled }}
+  name: {{ include "ovms.fullname" . }}-gpu-pvc
+  {{- else }}
+  name: {{ include "ovms.fullname" . }}-pvc
+  {{- end }}
+  {{- if .Values.global.keepPvc }}
   annotations:
-    helm.sh/resource-policy: keep
-  {{- end }} # Prevent Helm from deleting PVC on uninstall
+    helm.sh/resource-policy: keep   # Prevent Helm from deleting PVC on uninstall
+  {{- end }}
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: {{ .Values.global.egai_ovms_pvc.size }}
+      storage: {{ .Values.claimSize | default "10Gi" }}
+{{- end }}

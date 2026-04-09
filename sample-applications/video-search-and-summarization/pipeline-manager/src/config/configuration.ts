@@ -1,6 +1,5 @@
 // Copyright (C) 2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
-
 import { CONFIG_STATE } from 'src/features/features.model';
 
 export default () => ({
@@ -21,6 +20,9 @@ export default () => ({
   search: {
     endpoint: process.env.SEARCH_ENDPOINT,
     dataPrep: process.env.SEARCH_DATAPREP_ENDPOINT,
+    dataPrepTimeoutMs: process.env.SEARCH_DATAPREP_TIMEOUT_MS
+      ? Number(process.env.SEARCH_DATAPREP_TIMEOUT_MS)
+      : 30000,
   },
   database: {
     host: process.env.DB_HOST,
@@ -41,7 +43,7 @@ export default () => ({
     datetimeFormat: 'yyyy_MM_dd-HH_mm_ss.S',
     model: 'yolov8l-worldv2',
     modelPath:
-      '/home/pipeline-server/models/yoloworld/FP32/yolov8l-worldv2.xml',
+      '/home/pipeline-server/models/yoloworld/v2/FP32/yolov8l-worldv2.xml',
     device: process.env.EVAM_DEVICE ?? 'CPU',
     rmq: {
       queue: 'my_mqtt_queue',
@@ -68,6 +70,7 @@ export default () => ({
   openai: {
     usecase: 'default',
     useOVMS: process.env.USE_OVMS ?? CONFIG_STATE.OFF,
+    useVLLM: process.env.USE_VLLM ?? CONFIG_STATE.OFF,
     llmSummarization: {
       apiKey: process.env.LLM_SUMMARIZATION_KEY ?? '',
       apiBase: process.env.LLM_SUMMARIZATION_API,
@@ -85,6 +88,11 @@ export default () => ({
         seed: 42,
       },
     },
+  tick: {
+    interval: parseInt(process.env.TICK_INTERVAL_MS ?? '5000', 10),
+    fastInterval: parseInt(process.env.FAST_TICK_INTERVAL_MS ?? '2000', 10),
+  },
+
     vlmCaptioning: {
       apiKey: process.env.VLM_CAPTIONING_KEY ?? '',
       apiBase: process.env.VLM_CAPTIONING_API,

@@ -1,6 +1,6 @@
 services:
   nginx:
-    image: nginxinc/nginx-unprivileged:1.27.4
+    image: nginxinc/nginx-unprivileged:1.29.5
     ports:
       - "8101:8101"
     volumes:
@@ -64,7 +64,7 @@ services:
       - my_network
 
   reranker:
-    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.7
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.8.3
     container_name: reranker_tei
     ports:
       - "8090:80"
@@ -80,7 +80,7 @@ services:
     command: --model-id ${RERANKER_MODEL} --auto-truncate
 
   dataprep_pgvector:
-    image: ${REGISTRY:-}document-ingestion:1.2.1
+    image: ${REGISTRY:-}document-ingestion:latest
     container_name: dataprep_pgvector
     environment:
       no_proxy: ${no_proxy},tei-embedding-service
@@ -98,6 +98,7 @@ services:
       MINIO_API_PORT: ${MINIO_API_PORT:-9000}
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?error}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?error}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:?error}
     ports:
       - "8000:8000"
     depends_on:
@@ -217,7 +218,7 @@ services:
     shm_size: "1g"
 
   ovms-service:
-    image: openvino/model_server:2025.0
+    image: openvino/model_server:2026.0
     container_name: ovms-service
     profiles:
       - OVMS
@@ -233,19 +234,19 @@ services:
       - "9300:9300"
       - "8300:80"
     volumes:
-      - "${VOLUME_OVMS:-./ovms_config}:/workspace:ro"
+      - "${VOLUME_OVMS:-./ovms}:/workspace:ro"
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost/v2/health/ready" ]
       interval: 30s
       timeout: 10s
       retries: 3
-    command: [ "--port", "9300", "--rest_port", "80", "--log_level", "DEBUG", "--config_path", "workspace/models/config.json" ]
+    command: [ "--port", "9300", "--rest_port", "80", "--log_level", "DEBUG", "--config_path", "workspace/models/config_all.json" ]
     networks:
       - my_network
 
   #Embedding Services
   tei-embedding-service:
-    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.7
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.8.3
     profiles:
       - TEI
     container_name: tei-embedding-service
@@ -261,9 +262,12 @@ services:
       http_proxy: ${http_proxy}
       https_proxy: ${https_proxy}
     command: --model-id ${EMBEDDING_MODEL_NAME} --auto-truncate
+    mem_limit: 4g
+    mem_reservation: 4g
+
 
   ovms-service-gpu:
-    image: openvino/model_server:2025.0-gpu
+    image: openvino/model_server:2026.0-gpu
     container_name: ovms-service
     profiles:
       - GPU-OVMS
@@ -279,7 +283,7 @@ services:
       - "9000:9000"
       - "8300:80"
     volumes:
-      - "${VOLUME_OVMS:-./ovms_config}:/workspace:ro"
+      - "${VOLUME_OVMS:-./ovms}:/workspace:ro"
     devices:
       - /dev/dri:/dev/dri
     group_add:
@@ -289,7 +293,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    command: [ "--port", "9000", "--rest_port", "80", "--log_level", "DEBUG", "--config_path", "workspace/models/config.json" ]
+    command: [ "--port", "9000", "--rest_port", "80", "--log_level", "DEBUG", "--config_path", "workspace/models/config_all.json" ]
     networks:
       - my_network
 

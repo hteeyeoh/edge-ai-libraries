@@ -14,17 +14,41 @@ spec:
       labels:
         app: {{ include "videosearch.name" . }}
     spec:
+      initContainers:
+        - name: wait-for-vdms
+          image: busybox:latest
+          command: 
+            - sh
+            - -c
+            - |
+              echo "Waiting for VDMS VectorDB service to be ready..."
+              until nc -z {{ .Values.videosearch.env.VDMS_VDB_HOST }} {{ .Values.videosearch.env.VDMS_VDB_PORT }}; do
+                echo "VDMS VectorDB service is not ready yet, waiting..."
+                sleep 10
+              done
+              echo "VDMS VectorDB service is ready!"
       containers:
-        - name: videosearch
+        - name: {{ .Chart.Name }}
           image: "{{ .Values.videosearch.image.repository }}:{{ .Values.videosearch.image.tag }}"
           imagePullPolicy: "{{ .Values.videosearch.image.pullPolicy }}"
           ports:
-            - containerPort: {{ .Values.videosearch.service.targetPort }}
+            - containerPort: {{ .Values.videosearch.containerPort }}
+              name: {{ .Values.videosearch.containerPortName }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          startupProbe:
+            {{- toYaml .Values.startupProbe | nindent 12 }}
+          {{- with .Values.videosearch.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           env:
             - name: no_proxy
-              value: "{{ .Values.global.proxy.no_proxy }},localhost,127.0.0.1,audioanalyzer,vlm-inference-microservice,multimodal-embedding-ms,vdms-dataprep,vdms-vectordb,videosearch,videosummarybackend,videoingestion,minio-server,postgresql,video-summary-nginx,ovms,rabbitmq,.svc.cluster.local"
+              value: "{{ .Values.global.proxy.no_proxy }},localhost,127.0.0.1,audioanalyzer,vlm-inference-microservice,multimodal-embedding-ms,vdms-dataprep,vdms-vectordb,videosearch,pipelinemanager,videoingestion,minio-server,postgresql,video-summary-nginx,ovms,rabbitmq,.svc.cluster.local"
             - name: no_proxy_env
-              value: "{{ .Values.global.proxy.no_proxy }},localhost,127.0.0.1,audioanalyzer,vlm-inference-microservice,multimodal-embedding-ms,vdms-dataprep,vdms-vectordb,videosearch,videosummarybackend,videoingestion,minio-server,postgresql,video-summary-nginx,ovms,rabbitmq,.svc.cluster.local"
+              value: "{{ .Values.global.proxy.no_proxy }},localhost,127.0.0.1,audioanalyzer,vlm-inference-microservice,multimodal-embedding-ms,vdms-dataprep,vdms-vectordb,videosearch,pipelinemanager,videoingestion,minio-server,postgresql,video-summary-nginx,ovms,rabbitmq,.svc.cluster.local"
             - name: http_proxy
               value: "{{ .Values.global.proxy.http_proxy }}"
             - name: https_proxy
@@ -33,45 +57,61 @@ spec:
               value: "{{ .Values.videosearch.env.VDMS_VDB_HOST }}"
             - name: VDMS_VDB_PORT
               value: "{{ .Values.videosearch.env.VDMS_VDB_PORT }}"
-            - name: VCLIP_HOST_PORT
-              value: "{{ .Values.mmEmbeddingingMs.service.port }}"
-            - name: VCLIP_START_OFFSET_SEC
-              value: "{{ .Values.videosearch.env.VCLIP_START_OFFSET_SEC }}"
-            - name: VCLIP_CLIP_DURATION
-              value: "{{ .Values.videosearch.env.VCLIP_CLIP_DURATION }}"
-            - name: VCLIP_EMBEDDINGS_NUM_FRAMES
-              value: "{{ .Values.global.env.VCLIP_NUM_FRAMES }}"
-            - name: VCLIP_USE_OV
-              value: "{{ .Values.videosearch.env.VCLIP_USE_OV }}"
-            - name: VCLIP_DEVICE
-              value: "{{ .Values.videosearch.env.VCLIP_DEVICE }}"
-            - name: VCLIP_HOST
-              value: "{{ .Values.mmEmbeddingingMs.name }}"
-            - name: WATCH_DIRECTORY
-              value: "{{ .Values.videosearch.env.VS_WATCHER_DIR }}"
-            - name: DEBOUNCE_TIME
-              value: "{{ .Values.videosearch.env.VS_DEBOUNCE_TIME }}"
-            - name: DELETE_PROCESSED_FILES
-              value: "{{ .Values.videosearch.env.VS_DELETE_PROCESSED_FILES }}"
-            - name: VS_INITIAL_DUMP
-              value: "{{ .Values.videosearch.env.VS_INITIAL_DUMP }}"
-            - name: MINIO_API_PORT
-              value: "{{ .Values.minioServer.service.port }}"
-            - name: MINIO_HOST
-              value: "{{ .Values.minioServer.name }}"
-            - name: MINIO_ROOT_USER
-              value: {{ .Values.global.env.MINIO_ROOT_USER | quote }}
-            - name: MINIO_ROOT_PASSWORD
-              value: {{ .Values.global.env.MINIO_ROOT_PASSWORD | quote }}
-            - name: VCLIP_EMBEDDINGS_MODEL_NAME
-              value: {{ .Values.global.env.VCLIP_MODEL | quote }}
-            - name: VCLIP_EMBEDDINGS_ENDPOINT
-              value: {{ .Values.global.env.VCLIP_ENDPOINT | quote }}
             - name: INDEX_NAME
-              value: {{ .Values.global.env.VS_INDEX_NAME | quote }}
+              value: {{ .Values.global.vdmsIndexName | quote }}
+            {{- $vsEmbeddingModel := dict "value" "" }}
+            {{- if .Values.videosearch.env.EMBEDDINGS_MODEL_NAME }}
+            {{- $_ := set $vsEmbeddingModel "value" .Values.videosearch.env.EMBEDDINGS_MODEL_NAME }}
+            {{- else if (dig "embedding" "preferTextModel" false .Values.global) }}
+            {{- $_ := set $vsEmbeddingModel "value" (required "Set global.env.TEXT_EMBEDDING_MODEL_NAME when global.embedding.preferTextModel is true." (dig "env" "TEXT_EMBEDDING_MODEL_NAME" "" .Values.global)) }}
+            {{- else }}
+            {{- $_ := set $vsEmbeddingModel "value" (required "Set global.env.EMBEDDING_MODEL_NAME (or override videosearch.env.EMBEDDINGS_MODEL_NAME) before deploying the chart." (dig "env" "EMBEDDING_MODEL_NAME" "" .Values.global)) }}
+            {{- end }}
+            - name: EMBEDDINGS_ENDPOINT
+              value: {{ .Values.videosearch.env.EMBEDDINGS_ENDPOINT | default .Values.global.env.MULTIMODAL_EMBEDDING_ENDPOINT | quote }}
+            - name: EMBEDDINGS_MODEL_NAME
+              value: {{ $vsEmbeddingModel.value | quote }}
+            - name: SEARCH_ENGINE
+              value: {{ .Values.videosearch.env.SEARCH_ENGINE | quote }}
+            - name: DISTANCE_STRATEGY
+              value: {{ .Values.videosearch.env.DISTANCE_STRATEGY | quote }}
+            - name: WATCH_DIRECTORY
+              value: {{ .Values.videosearch.env.VS_WATCHER_DIR | quote }}
+            - name: WATCH_DIRECTORY_CONTAINER_PATH
+              value: {{ .Values.videosearch.env.WATCH_DIRECTORY_CONTAINER_PATH | quote }}
+            - name: WATCH_DIRECTORY_RECURSIVE
+              value: {{ .Values.videosearch.env.WATCH_DIRECTORY_RECURSIVE | quote }}
+            - name: DEBOUNCE_TIME
+              value: {{ .Values.videosearch.env.VS_DEBOUNCE_TIME | quote }}
+            - name: DELETE_PROCESSED_FILES
+              value: {{ .Values.videosearch.env.VS_DELETE_PROCESSED_FILES | quote }}
+            - name: VS_INITIAL_DUMP
+              value: {{ .Values.videosearch.env.VS_INITIAL_DUMP | quote }}
             - name: VIDEO_UPLOAD_ENDPOINT
-              value: {{ .Values.videosearch.env.VIDEO_UPLOAD_ENDPOINT }}
-            - name: VDMS_BUCKET
-              value: "{{ .Values.videosearch.env.VDMS_BUCKET }}"
-            - name: CHUNK_DURATION
-              value: "{{ .Values.videosearch.env.VS_DEFAULT_CLIP_DURATION }}"
+              value: {{ .Values.videosearch.env.VIDEO_UPLOAD_ENDPOINT | quote }}
+            - name: AGGREGATION_ENABLED
+              value: {{ .Values.videosearch.env.AGGREGATION_ENABLED | quote }}
+            - name: AGGREGATION_SEGMENT_DURATION
+              value: {{ .Values.videosearch.env.AGGREGATION_SEGMENT_DURATION | quote }}
+            - name: AGGREGATION_MIN_GAP
+              value: {{ .Values.videosearch.env.AGGREGATION_MIN_GAP | quote }}
+            - name: AGGREGATION_MAX_RESULTS
+              value: {{ .Values.videosearch.env.AGGREGATION_MAX_RESULTS | quote }}
+            - name: AGGREGATION_INITIAL_K
+              value: {{ .Values.videosearch.env.AGGREGATION_INITIAL_K | quote }}
+            - name: AGGREGATION_CONTEXT_SEEK_OFFSET_SECONDS
+              value: {{ .Values.videosearch.env.AGGREGATION_CONTEXT_SEEK_OFFSET_SECONDS | quote }}
+            - name: AGGREGATION_QUAL_MAX_WEIGHT
+              value: {{ .Values.videosearch.env.AGGREGATION_QUAL_MAX_WEIGHT | quote }}
+            - name: AGGREGATION_QUAL_TOP_WEIGHT
+              value: {{ .Values.videosearch.env.AGGREGATION_QUAL_TOP_WEIGHT | quote }}
+            - name: AGGREGATION_QUAL_TOP_RATIO
+              value: {{ .Values.videosearch.env.AGGREGATION_QUAL_TOP_RATIO | quote }}
+            - name: AGGREGATION_QUAL_TOP_MIN_COUNT
+              value: {{ .Values.videosearch.env.AGGREGATION_QUAL_TOP_MIN_COUNT | quote }}
+            - name: AGGREGATION_QUAL_TOP_MAX_COUNT
+              value: {{ .Values.videosearch.env.AGGREGATION_QUAL_TOP_MAX_COUNT | quote }}
+            - name: AGGREGATION_CONTEXT_SIGMA_SECONDS
+              value: {{ .Values.videosearch.env.AGGREGATION_CONTEXT_SIGMA_SECONDS | quote }}
+            - name: AGGREGATION_CONTEXT_BOOST_STRENGTH
+              value: {{ .Values.videosearch.env.AGGREGATION_CONTEXT_BOOST_STRENGTH | quote }}

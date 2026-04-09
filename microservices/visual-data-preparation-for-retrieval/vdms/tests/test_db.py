@@ -14,7 +14,6 @@ def vdms_client(mocker, tmp_path):
     A pytest fixture to use mock VDMS_Client object
     """
     mocker.patch("src.core.db.VDMS_Client", return_value=None)
-    mocker.patch("src.core.db.vCLIPEmbeddings", return_value=object)
 
     mock_vdms = mocker.MagicMock()
     mock_vdms.add_videos.return_value = None
@@ -46,7 +45,6 @@ def test_vdms_client_props(vdms_client, tmp_path):
     assert vdms_client.embedding_dimensions == 512
     assert vdms_client.video_search_type == "similarity"
     assert vdms_client.constraints is None
-    src.core.db.vCLIPEmbeddings.assert_called_once_with(model="super-model")
 
 
 def test_vdms_client_conn(vdms_client):
@@ -61,7 +59,7 @@ def test_store_embedding(vdms_client, mocker, tmp_path):
     """
     Test create_embedding methods of VDMSClient
     """
-    mock_data = {"video_temp_path": tmp_path, "timestamp": "time", "clip_duration": 30}
+    mock_data = {"video_temp_path": tmp_path, "timestamp": "time", "frame_interval": 30}
     mock_metadata = {"video": mock_data}
     paths = [mock_data["video_temp_path"]]
     mocker.patch("src.core.db.read_config", return_value=mock_metadata)
@@ -71,5 +69,5 @@ def test_store_embedding(vdms_client, mocker, tmp_path):
         metadatas=[mock_data],
         paths=paths,
         start_time=[mock_data["timestamp"]],
-        clip_duration=[mock_data["clip_duration"]],
+        frame_interval=[mock_data["frame_interval"]],
     )

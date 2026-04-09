@@ -1,9 +1,21 @@
 // Copyright (C) 2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
+import { Video } from '../video/video';
+
+export type TimeFilterUnit = 'minutes' | 'hours' | 'days' | 'weeks';
+
+export interface TimeFilterSelection {
+  value?: number;
+  unit?: TimeFilterUnit;
+  start?: string;
+  end?: string;
+  source?: string;
+}
 
 export interface SearchQueryDTO {
   query: string;
-  tags?: string[];
+  tags?: string;
+  timeFilter?: TimeFilterSelection | null;
 }
 
 export interface SearchShimQuery {
@@ -24,6 +36,7 @@ export interface SearchResult {
   metadata: {
     bucket_name: string;
     clip_duration: number;
+    tags: string;
     date: string;
     date_time: string;
     day: number;
@@ -49,6 +62,13 @@ export interface SearchResult {
   };
   page_content: string;
   type: string;
+  video: Video;
+}
+
+export enum SearchQueryStatus {
+  IDLE = 'idle',
+  RUNNING = 'running',
+  ERROR = 'error',
 }
 
 export interface SearchQuery {
@@ -57,9 +77,12 @@ export interface SearchQuery {
   query: string;
   watch: boolean;
   results: SearchResult[];
+  queryStatus: SearchQueryStatus;
   tags: string[];
+  timeFilter?: TimeFilterSelection | null;
   createdAt: string;
   updatedAt: string;
+  errorMessage?: string;
 }
 
 export interface SearchQueryUI extends SearchQuery {
@@ -68,6 +91,7 @@ export interface SearchQueryUI extends SearchQuery {
 
 export interface SearchState {
   searchQueries: SearchQueryUI[];
+  suggestedTags: string[];
   unreads: string[];
   selectedQuery: string | null;
   triggerLoad: boolean;

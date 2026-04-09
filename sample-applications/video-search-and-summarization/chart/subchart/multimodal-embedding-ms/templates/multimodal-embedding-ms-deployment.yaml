@@ -21,81 +21,105 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
-      securityContext:
-        fsGroup: {{ .Values.gpu.videoGroupID }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.podAffinity }}
+      affinity:
+        podAffinity:
+          {{- toYaml . | nindent 10 }}
+      {{- end }}
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
       containers:
-        - name: {{ .Release.Name }}
-          image: "{{ ternary .Values.image.gpu.repository .Values.image.cpu.repository .Values.gpu.enabled }}:{{ ternary .Values.image.tag .Values.global.commonTag (empty .Values.global.commonTag) | default .Chart.AppVersion }}"
+        - name: {{ .Chart.Name }}
+          image: "{{ ternary .Values.image.gpu.repository .Values.image.cpu.repository .Values.global.gpu.multimodalembeddingmsEnabled }}:{{ ternary .Values.image.tag .Values.global.commonTag (empty .Values.global.commonTag) | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            privileged: false
           ports:
-            - name: {{ .Values.service.name }}
-              containerPort: 8000
+            - name: {{ .Values.containerPortName }}
+              containerPort: {{ .Values.containerPort }}
               protocol: TCP
           livenessProbe:
             {{- toYaml .Values.livenessProbe | nindent 12 }}
           readinessProbe:
             {{- toYaml .Values.readinessProbe | nindent 12 }}
-          {{- with .Values.resources }}
-          resources:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
+          startupProbe:
+            {{- toYaml .Values.startupProbe | nindent 12 }}
           envFrom:
             - configMapRef:
                 name: {{ include "multimodal-embedding-ms.fullname" . }}-config
-          env:
-            - name: EMBEDDING_DEVICE
-              value: {{ if .Values.gpu.enabled }}"GPU"{{ else }}"CPU"{{ end }}
-            - name: EMBEDDING_USE_OV
-              value: {{ if .Values.gpu.enabled }}"true"{{ else }}"false"{{ end }}
-          securityContext:
-            runAsUser: 0
-            runAsGroup: {{ .Values.gpu.renderGroupID }}
-            {{- if .Values.gpu.group_add }}
-            capabilities:
-              add:
-                {{- toYaml .Values.gpu.group_add | nindent 16 }}
-            {{- end }}
+      {{- if .Values.global.gpu.multimodalembeddingmsEnabled }}
+          resources:
+            requests:
+              {{ .Values.global.gpu.key}}: 1
+            limits:
+              {{ .Values.global.gpu.key}}: 1
+      {{- else if .Values.resources }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+      {{- end }}
           volumeMounts:
             - name: tmp
               mountPath: /tmp
             - name: volume-data
               mountPath: /home/appuser/.cache/huggingface
               subPath: huggingface
+      {{- if .Values.modelPvc.enabled }}
+            - name: models-data
+              mountPath: /app/ov_models
+              subPath: ovmodels
+      {{- else }}
             - name: volume-data
-              mountPath: /app/ov-model
+              mountPath: /app/ov_models
+              subPath: ovmodels
+      {{- end }}
             - name: volume-data
               mountPath: /tmp/dataprep
-              subPath: dataprep
-            {{- if .Values.gpu.enabled }}
-            - name: gpu-devices
-              mountPath: /dev/dri
-            {{- end }}
+              subPath: tmpvideos
       volumes:
         - name: tmp
           emptyDir: {}
-        - name: volume-data
-          {{- if .Values.global.volumeHostPath }}
-          hostPath:
-            path: {{ .Values.global.volumeHostPath }}
-            type: DirectoryOrCreate
-          {{- else if .Values.global.pvcName }}
-          persistentVolumeClaim:
-            claimName: {{ .Values.global.pvcName }}
-          {{- else }}
-          emptyDir: {}
-          {{- end }}
-        {{- if .Values.gpu.enabled }}
-        - name: gpu-devices
+      {{- if .Values.global.gpu.multimodalembeddingmsEnabled }}
+        - name: dri-device
           hostPath:
             path: /dev/dri
             type: Directory
-        {{- end }}
+        - name: workspace
+          persistentVolumeClaim:
+            claimName: {{ include "multimodal-embedding-ms.fullname" . }}-gpu-pvc
+      {{- end }}
+      {{- if .Values.modelPvc.enabled }}
+        - name: models-data
+          {{- if .Values.modelPvc.existingClaim }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.modelPvc.existingClaim }}
+          {{- else if .Values.global.usePvc }}
+          persistentVolumeClaim:
+            claimName: {{ include "multimodal-embedding-ms.fullname" . }}-models-pvc
+          {{- else if .Values.global.volumeHostPath }}
+          hostPath:
+            path: {{ .Values.global.volumeHostPath }}
+            type: DirectoryOrCreate
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- end }}
+        - name: volume-data
+          {{- if .Values.global.usePvc }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.global.sharedPvcName | default "vss-pvc" }}
+          {{- else if .Values.global.volumeHostPath }}
+          hostPath:
+            path: {{ .Values.global.volumeHostPath }}
+            type: DirectoryOrCreate
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
       tolerations:
         {{- toYaml .Values.tolerations | nindent 8 }}
       affinity:

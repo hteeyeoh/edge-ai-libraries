@@ -58,6 +58,7 @@ export VLM_ACCESS_LOG_FILE="/dev/null"
 - **VLM_LOG_LEVEL**: Control logging verbosity (`debug`, `info`, `warning`, `error`)
 - **VLM_MAX_COMPLETION_TOKENS**: Limit response length
 - **HUGGINGFACE_TOKEN**: Required for gated models
+- **VLM_TELEMETRY_PATH / VLM_TELEMETRY_MAX_RECORDS**: Configure where `/v1/telemetry` data is stored and how many records are retained
 
 For detailed information about each variable, configuration examples, and advanced setups, refer to the [Environment Variables Guide](./environment-variables.md).
 
@@ -73,7 +74,13 @@ source setup.sh
 
 The user has an option to either [build the docker images](./how-to-build-from-source.md#steps-to-build) or use prebuilt images as documented below.
 
-_Document how to get prebuilt docker image_
+**Configure the registry**:
+   The VLM OpenVINO Serving microservice uses registry URL and tag to pull the required image.
+
+ ```bash
+ export REGISTRY_URL=intel
+ export TAG=latest
+ ```
 
 ## Running the Server with CPU
 
@@ -126,7 +133,15 @@ curl --location --request GET 'http://localhost:9764/health'
 curl --location --request GET 'http://localhost:9764/device'
 ```
 
-For detailed GPU configuration options, device discovery, and performance tuning recommendations, refer to the `Device Configuration` section in [Environment Variables Guide](./environment-variables.md#device-configuration).
+> **Note**: For detailed GPU configuration options, device discovery, and performance tuning recommendations, refer to the `Device Configuration` section in [Environment Variables Guide](./environment-variables.md#device-configuration).
+
+## Stop the VLM OpenVINO Serving microservice
+
+To stop and remove the Docker containers, use the following command:
+
+```bash
+docker compose -f docker/compose.yaml down
+```
 
 ## Sample CURL Commands
 
@@ -136,7 +151,7 @@ For detailed GPU configuration options, device discovery, and performance tuning
 curl --location 'http://localhost:9764/v1/chat/completions' \
 --header 'Content-Type: application/json' \
 --data '{
-    "model": "microsoft/Phi-3.5-vision-instruct",
+    "model": "Qwen/Qwen2.5-VL-3B-Instruct",
     "messages": [
         {
             "role": "user",
@@ -167,7 +182,7 @@ curl --location 'http://localhost:9764/v1/chat/completions' \
 curl --location 'http://localhost:9764/v1/chat/completions' \
 --header 'Content-Type: application/json' \
 --data '{
-    "model": "microsoft/Phi-3.5-vision-instruct",
+    "model": "Qwen/Qwen2.5-VL-3B-Instruct",
     "max_completion_tokens": 100,
     "messages": [
         {
@@ -195,7 +210,7 @@ curl --location 'http://localhost:9764/v1/chat/completions' \
 curl --location 'http://localhost:9764/v1/chat/completions' \
 --header 'Content-Type: application/json' \
 --data '{
-    "model": "microsoft/Phi-3.5-vision-instruct",
+    "model": "Qwen/Qwen2.5-VL-3B-Instruct",
     "messages": [
       {
         "role": "user",
@@ -207,13 +222,13 @@ curl --location 'http://localhost:9764/v1/chat/completions' \
           {
             "type": "image_url",
             "image_url": {
-              "url": "https://preschool.org/wp-content/uploads/2021/08/What-to-do-during-your-preschool-reading-time-855x570.jpg"
+              "url": "https://github.com/openvinotoolkit/openvino_notebooks/assets/29454499/d5fbbd1a-d484-415c-88cb-9986625b7b11"
             }
           },
           {
             "type": "image_url",
             "image_url": {
-              "url": "https://images.squarespace-cdn.com/content/v1/659e1d627cfb464f89ed5d6d/16cb28f5-86eb-4bdd-a240-fb3316523aee/AdobeStock_663850233.jpeg"
+              "url": "https://github.com/openvinotoolkit/openvino_notebooks/assets/29454499/d5fbbd1a-d484-415c-88cb-9986625b7b11"
             }
           }
         ]
@@ -232,7 +247,7 @@ curl --location 'http://localhost:9764/v1/chat/completions' \
     curl --location 'http://localhost:9764/v1/chat/completions' \
     --header 'Content-Type: application/json' \
     --data '{
-        "model": "microsoft/Phi-3.5-vision-instruct",
+        "model": "Qwen/Qwen2.5-VL-3B-Instruct",
         "messages": [
         {
             "role": "user",
@@ -258,7 +273,7 @@ curl --location 'http://localhost:9764/v1/chat/completions' \
 
     client = OpenAI(
         base_url = "http://localhost:9764/v1",
-        api_key="",
+        api_key="EMPTY",
     )
 
     # Define the conversation history
@@ -279,7 +294,7 @@ curl --location 'http://localhost:9764/v1/chat/completions' \
 
     # Send the request to the model
     response = client.chat.completions.create(
-        model="microsoft/Phi-3.5-vision-instruct",
+        model="Qwen/Qwen2.5-VL-3B-Instruct",
         messages=messages,
         max_completion_tokens=1000,
     )
@@ -289,13 +304,13 @@ curl --location 'http://localhost:9764/v1/chat/completions' \
 
 ### Test **video** type input
 
-> **_NOTE:_** video_url type input is only supported with the `Qwen/Qwen2.5-VL-7B-Instruct` or `Qwen/Qwen2-VL-2B-Instruct` models. Although other models will accept input as `video` type, but internally they will process it as multi-image input only.
+> **_NOTE:_** video_url type input is only supported with the `Qwen/Qwen2.5-VL-3B-Instruct`, `Qwen/Qwen2.5-VL-7B-Instruct` or `Qwen/Qwen2-VL-2B-Instruct` models. Although other models will accept input as `video` type, but internally they will process it as multi-image input only.
 
 ```bash
 curl --location 'http://localhost:9764/v1/chat/completions' \
 --header 'Content-Type: application/json' \
 --data '{
-    "model": "microsoft/Phi-3.5-vision-instruct",
+    "model": "Qwen/Qwen2.5-VL-3B-Instruct",
     "messages": [
       {
         "role": "user",
@@ -320,14 +335,14 @@ curl --location 'http://localhost:9764/v1/chat/completions' \
 
 ### Test **video_url** type input
 
-> **_NOTE:_** video_url type input is only supported with the `Qwen/Qwen2.5-VL-7B-Instruct` or `Qwen/Qwen2-VL-2B-Instruct` models.
+> **_NOTE:_** video_url type input is only supported with the `Qwen/Qwen2.5-VL-3B-Instruct`, `Qwen/Qwen2.5-VL-7B-Instruct` or `Qwen/Qwen2-VL-2B-Instruct` models.
 > **_NOTE:_** `max_pixels` and `fps` are optional parameters.
 
 ```bash
 curl --location 'http://localhost:9764/v1/chat/completions' \
 --header 'Content-Type: application/json' \
 --data '{
-    "model": "Qwen/Qwen2.5-VL-7B-Instruct",
+    "model": "Qwen/Qwen2.5-VL-3B-Instruct",
     "messages": [
       {
         "role": "user",
@@ -354,14 +369,17 @@ curl --location 'http://localhost:9764/v1/chat/completions' \
 
 ### Test **video_url** as base64 encoded video input
 
-> **_NOTE:_** video_url type input is only supported with the `Qwen/Qwen2.5-VL-7B-Instruct` or `Qwen/Qwen2-VL-2B-Instruct` models.
+> **_NOTE:_** video_url type input is only supported with the `Qwen/Qwen2.5-VL-3B-Instruct`, `Qwen/Qwen2.5-VL-7B-Instruct` or `Qwen/Qwen2-VL-2B-Instruct` models.
 > **_NOTE:_** `max_pixels` and `fps` are optional parameters.
 
 ```bash
-curl --location 'http://localhost:9764/v1/chat/completions' \
---header 'Content-Type: application/json' \
---data '{
-    "model": "Qwen/Qwen2.5-VL-7B-Instruct",
+# Encode video to base64 (ensure you have a video file named 'test.mp4')
+export VIDEO_B64=$(base64 -w 0 test.mp4)
+
+# Create JSON payload
+cat <<EOF > payload.json
+{
+    "model": "Qwen/Qwen2.5-VL-3B-Instruct",
     "messages": [
       {
         "role": "user",
@@ -373,7 +391,7 @@ curl --location 'http://localhost:9764/v1/chat/completions' \
           {
             "type": "video_url",
             "video_url": {
-              "url": "data:video/mp4;base64,{video_base64}"
+              "url": "data:video/mp4;base64,$VIDEO_B64"
             }
           }
         ]
@@ -381,8 +399,35 @@ curl --location 'http://localhost:9764/v1/chat/completions' \
     ],
     "max_completion_tokens": 1000,
     "stream":true
-  }'
+}
+EOF
+
+# Send request
+curl --location 'http://localhost:9764/v1/chat/completions' \
+--header 'Content-Type: application/json' \
+--data @payload.json
 ```
+
+### View Recent Telemetry Entries
+
+The microservice exposes `/v1/telemetry` to inspect the most recent (up to 100) inference requests. Each entry contains high-level request parameters, media counts, usage metrics, and perf telemetry captured from the model backend.
+
+> **Tip:** Use `VLM_TELEMETRY_PATH` to move the JSONL file to a different mount (for persistent storage or easier scraping) and `VLM_TELEMETRY_MAX_RECORDS` to adjust how many records are kept.
+
+> **Default:** The endpoint returns up to 100 entries when no `limit` value is provided.
+
+> **Note:** Telemetry metrics are available for all models that execute inference through the `openvino_genai` pipeline. The only exception today is `HuggingFaceTB/SmolVLM2-2.2B-Instruct`, which relies on `OVModelForVisualCausalLM` from `optimum-intel` and therefore does not emit `openvino_genai` PerfMetrics.
+
+```bash
+curl --location 'http://localhost:9764/v1/telemetry?limit=5'
+```
+
+The response follows the `TelemetryListResponse` schema:
+
+- `count`: number of items returned (newest first)
+- `items[]`: individual telemetry records with `id`, `timestamp`, `status`, `request.parameters`, `request.media`, `usage`, and `telemetry`
+
+Use this endpoint to verify request history across multiple workers or to collect quick performance snapshots without accessing container logs.
 
 ### Test GET Device
 
@@ -392,12 +437,12 @@ To get the list of available devices
 curl --location --request GET 'http://localhost:9764/device'
 ```
 
-### Test POST Device details
+### Test GET Device details
 
 To get specific device details
 
 ```bash
-curl --location --request POST 'http://localhost:9764/device?device=GPU' \
+curl --location --request GET 'http://localhost:9764/device/CPU' \
 --header 'Content-Type: application/json'
 ```
 

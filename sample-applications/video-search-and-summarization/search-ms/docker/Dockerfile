@@ -1,19 +1,23 @@
 # Copyright (C) 2025 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
-FROM python:3.12.10-slim AS build
+FROM python:3.12.12-slim AS build
 
-RUN pip install poetry
+ARG USER_ID=1000
+ARG USER_GROUP_ID=1000
+
+RUN groupadd -g ${USER_GROUP_ID} appuser && useradd -m -s /bin/bash -u ${USER_ID} -g ${USER_GROUP_ID} appuser
+
+RUN pip install poetry==2.1.3
 
 RUN poetry config virtualenvs.create false
 
 WORKDIR /app
 
 COPY poetry.lock pyproject.toml /app/
-RUN poetry install --no-root
+RUN poetry lock && poetry install --no-root
 
 COPY . .
-RUN mkdir -p /tmp/watcher-dir
 
 # Optionally download copyleft sources if requested
 ARG COPYLEFT_SOURCES=false
@@ -35,7 +39,7 @@ RUN if [ "$COPYLEFT_SOURCES" = "true" ]; then \
         # Get source code for installed Python packages with copyleft licenses \
         mkdir -p /copyleft_sources/python && \
         cd /copyleft_sources/python && \
-        apt-get update && apt-get install -y gcc build-essential libffi-dev python3-dev && \
+        apt-get update && apt-get install --no-install-recommends -y gcc build-essential libffi-dev python3-dev && \
         # Download python package sources with relevant licenses \
         pip3 freeze | cut -d= -f1 | while read pkg; do \
             meta=$(pip3 show $pkg 2>/dev/null); \
@@ -47,6 +51,10 @@ RUN if [ "$COPYLEFT_SOURCES" = "true" ]; then \
         done; \
         apt-get remove --purge -y gcc build-essential libffi-dev python3-dev; \
     fi
+    
+RUN mkdir -p /tmp/watcher-dir && chmod 775 /tmp/watcher-dir && chown -R appuser:appuser /app
+
+USER appuser
 
 EXPOSE 8000
 

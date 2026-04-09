@@ -6,29 +6,35 @@ authors = []
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.10"
-fastapi = "^0.115.5"
-uvicorn = "^0.32.1"
+python = ">=3.10,<3.14"
+fastapi = "^0.121.3"
+uvicorn = "^0.38.0"
 gunicorn = "^23.0.0"
-pydantic = "^2.11.5"
-pydantic-settings = "^2.9.1"
-python-multipart = "^0.0.18"
-setuptools = "^80.9.0"
+pydantic = "^2.11.7"
+pydantic-settings = "^2.10.1"
+python-multipart = "^0.0.22"
+setuptools = "^82.0.1"
 transformers = "^4.52.4"
 huggingface-hub = "^0.32.3"
-langchain = "^0.3.25"
-langchain-core = "^0.3.63"
-langchain-community = "^0.3.24"
-numpy = "^2.1.0"
+langchain = "^1.2.12"
+langchain-core = "^1.2.18"
+langchain-vdms = "^0.2.0"
+langsmith = "^0.7.16"
 opencv-python-headless = "^4.11.0.86"
-vdms = "^0.0.21"
-pillow = "^11.0.0"
+pillow = "^12.1.1"
 tzlocal = "^5.2"
 decord = "^0.6.0"
 einops = "^0.8.0"
 minio = "^7.1.15"
 requests = "^2.31.0"
 httpcore = "^1.0.9"
+urllib3 = "^2.6.3"
+fonttools = "^4.61.1"
+filelock = "^3.20.3"
+orjson = "^3.11.7"
+
+# Multimodal Embedding Service as wheel dependency
+multimodal-embedding-serving = {path = "wheels/multimodal_embedding_serving-0.1.1-py3-none-any.whl"}
 
 [tool.poetry.group.dev]
 optional = true
@@ -45,8 +51,9 @@ black = "^24.10.0"
 isort = "^5.13.2"
 
 [tool.poetry.group.cpu.dependencies]
-torch = { version = "^2.7.0", source = "pytorch-cpu" }
-torchvision = { version = "^0.22.0", source = "pytorch-cpu" }
+numpy = { version = ">=2.1.0", source = "pytorch-cpu" }
+torch = { version = "==2.8.0", source = "pytorch-cpu" }
+torchvision = { version = "==0.23.0", source = "pytorch-cpu" }
 
 [[tool.poetry.source]]
 name = "pytorch-cpu"

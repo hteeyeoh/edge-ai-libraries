@@ -1,6 +1,5 @@
 // Copyright (C) 2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
-
 import { Body, Controller, Post, Res } from '@nestjs/common';
 import { LlmService } from '../services/llm.service';
 import { TemplateService } from '../services/template.service';
@@ -34,7 +33,7 @@ export class LlmController {
         },
         error: (err: Error) => {
           console.error('Streaming error:', err);
-          res.status(500).send(err.message);
+          res.status(500).json({ message: 'Internal server error' });
         },
         complete: () => {
           console.log(response);
@@ -52,7 +51,7 @@ export class LlmController {
       );
     } catch (error) {
       console.error('Error in textInference:', error);
-      res.status(500).send(error);
+      res.status(500).json({ message: 'Internal server error' });
     }
   }
 }

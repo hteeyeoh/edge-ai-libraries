@@ -4,36 +4,23 @@ FROM python:3.11-slim AS python-base
 
 # Define a build-time variable to determine if GPU drivers should be installed
 ARG USE_GPU=false
-ARG GPU_TYPE="none"  # Options: none, igpu, dgpu
-ARG INSTALL_DRIVER_VERSION="24.39.31294"
+ARG INSTALL_DRIVER_VERSION="25.48.36300"
 ARG UID=1000
 ARG GID=1000
 
-RUN echo "USE_GPU is set to $USE_GPU"; \
-    echo "GPU_TYPE is set to $GPU_TYPE"
+RUN echo "USE_GPU is set to $USE_GPU"
 
-# Copy drivers and set execute permissions on all .sh files
-COPY ./drivers /tmp/drivers
-RUN chmod +x /tmp/drivers/*.sh
+# Copy drivers and set execute permission on sh files
+COPY ./drivers/install_gpu_drivers.sh /tmp/drivers/install_gpu_drivers.sh
+RUN chmod +x /tmp/drivers/install_gpu_drivers.sh
 
 # Install GPU drivers if required
 RUN if [ "$USE_GPU" = "true" ]; then \
-    if [ "$GPU_TYPE" != "igpu" ] && [ "$GPU_TYPE" != "dgpu" ]; then \
-    echo "ERROR: GPU_TYPE must be set to 'igpu' or 'dgpu' when USE_GPU is set to true"; \
-    exit 1; \
-    fi && \
-    if [ "$GPU_TYPE" = "igpu" ]; then \
-    echo "Installing iGPU drivers"; \
-    /tmp/drivers/install_igpu_drivers.sh; \
-    elif [ "$GPU_TYPE" = "dgpu" ]; then \
-    echo "Installing dGPU drivers version $INSTALL_DRIVER_VERSION"; \
+    echo "Installing GPU drivers version $INSTALL_DRIVER_VERSION"; \
     apt-get update && apt-get install -y --no-install-recommends ca-certificates libxml2; \
-    /tmp/drivers/install_dgpu_drivers.sh; \
-    fi; \
+    /tmp/drivers/install_gpu_drivers.sh; \
     else \
-    if [ "$GPU_TYPE" != "none" ]; then \
     echo "USE_GPU is set to false. No GPU drivers will be installed. Only CPU is supported."; \
-    fi; \
     apt-get clean && \
     rm -rf /tmp/drivers /var/lib/apt/lists/* /tmp/*; \
     fi
@@ -60,7 +47,7 @@ ENV PYTHONUNBUFFERED=1 \
 ENV PATH="$POETRY_HOME/bin:$VENV_PATH/bin:$PATH"
 
 # Upgrade pip and setuptools to the latest version to fix vuln
-RUN /usr/local/bin/pip install --upgrade --no-cache-dir pip setuptools
+RUN /usr/local/bin/pip install --upgrade --no-cache-dir pip setuptools wheel
 
 # Create a non-root user
 RUN groupadd -g ${GID} appuser && \
@@ -77,7 +64,7 @@ RUN curl -sSL https://install.python-poetry.org | python -
 WORKDIR $SETUP_PATH
 COPY poetry.lock pyproject.toml ./
 # Install runtime (prod) deps. Uses $POETRY_VIRTUALENVS_IN_PROJECT to create venv.
-RUN poetry install --only main
+RUN poetry install --with openvino --without dev --without ollama
 
 
 # `dev` image is used during development / testing
@@ -91,7 +78,7 @@ COPY --from=builder-base $POETRY_HOME $POETRY_HOME
 COPY --from=builder-base $SETUP_PATH $SETUP_PATH
 
 # Install dev dependencies. Prod dependencies are already installed.
-RUN poetry install --with dev
+RUN poetry install --with dev,openvino,ollama
 
 # Source code will be mounted here
 WORKDIR /app
@@ -100,7 +87,8 @@ USER appuser
 
 EXPOSE 8888
 
-CMD uvicorn app.server:app --host 0.0.0.0 --port 8888 --reload
+CMD ["uvicorn", "app.server:app", "--host", "0.0.0.0", "--port", "8888", "--reload"]
+
 
 # `prod` image used for runtime
 FROM python-base AS prod
@@ -116,21 +104,19 @@ RUN apt-get update && apt-get install --no-install-recommends --fix-missing -y \
 # Copy the poetry installation and the virtual env
 COPY --from=builder-base $SETUP_PATH $SETUP_PATH
 
-RUN sed -i 's/tokenizer.pad_token_id = model.config.eos_token_id/tokenizer.pad_token_id = tokenizer.eos_token_id/' \
-    /opt/projsetup/.venv/lib/python3.11/site-packages/langchain_huggingface/llms/huggingface_pipeline.py
 
 # Prepare directories for model cache and config
 RUN mkdir -p /tmp/model_cache /tmp/model_config
 
 # Copy application code and model config
 COPY app ./app
-COPY model_config/sample/template.yaml /tmp/model_config/default_model.yaml
+COPY model_config/sample/openvino_template.yaml /tmp/model_config/default_model.yaml
 
 # Set ownership to appuser
-RUN chown -R appuser:appuser /my-app /tmp/model_cache /tmp/model_config/
+RUN chown -R appuser:appuser /my-app /tmp/model_cache /tmp/model_config
 
 USER appuser
 
 EXPOSE 8888
 
-CMD uvicorn app.server:app --host 0.0.0.0 --port 8888
+CMD ["uvicorn", "app.server:app", "--host", "0.0.0.0", "--port", "8888"]

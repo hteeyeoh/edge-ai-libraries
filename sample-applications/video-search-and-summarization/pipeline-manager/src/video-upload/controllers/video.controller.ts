@@ -1,6 +1,5 @@
 // Copyright (C) 2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
-
 import {
   Body,
   Controller,
@@ -53,14 +52,16 @@ export class VideoController {
 
     if (!streamable) {
       throw new UnprocessableEntityException(
-        'The video file is not streamable. Please upload a valid video file.',
+        'The video file is not streamable. Please upload a streamable MP4 video.',
       );
     }
 
     const parsedObject: VideoDTO = { name: file.filename, tagsArray: [] };
 
     if (reqBody.tags) {
-      parsedObject.tagsArray = reqBody.tags.split(',');
+      parsedObject.tagsArray = reqBody.tags
+        .split(',')
+        .map((curr) => curr.trim());
     }
 
     const videoId = await this.$video.uploadVideo(

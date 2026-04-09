@@ -1,0 +1,37 @@
+multimodalembeddingms:
+  enabled: true
+vdmsdataprep:
+  enabled: true
+vdmsvectordb:
+  enabled: true
+videosearch:
+  enabled: true
+rabbitmq:
+  enabled: true
+vlminference:
+  enabled: true
+videoingestion:
+  enabled: true
+audioanalyzer:
+  enabled: true
+
+global:
+  # vdmsIndexName is the DB Index or DB Collection name used by VDMS Vector DB.
+  vdmsIndexName: "video_summary_embeddings"
+  embedding:
+    preferTextModel: true
+  env:
+    EMBEDDING_MODEL_NAME: ""
+    TEXT_EMBEDDING_MODEL_NAME: ""
+
+pipelinemanager:
+  env:
+    SUMMARY_FEATURE: "FEATURE_ON"
+    SEARCH_FEATURE: "FEATURE_ON"
+
+videosummaryui:
+  name: videosummaryui
+  feature:
+    summary: "FEATURE_ON"
+    search: "FEATURE_ON"
+    mux: "SUMMARY_SEARCH"

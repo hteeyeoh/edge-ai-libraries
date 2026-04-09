@@ -16,7 +16,7 @@ def test_getvideos_list(test_client, mocker):
         ("video2", ["file2.mp4", "file3.mp4"]),
     ]
 
-    mocker.patch("src.core.util.get_minio_client", return_value=mock_minio)
+    mocker.patch("src.core.utils.common_utils.get_minio_client", return_value=mock_minio)
 
     # Test API endpoint
     response = test_client.get("/videos")
@@ -41,7 +41,7 @@ def test_getvideos_minio_error(test_client, mocker):
     mock_minio = MagicMock()
     mock_minio.ensure_bucket_exists.side_effect = Exception("Minio error")
 
-    mocker.patch("src.core.util.get_minio_client", return_value=mock_minio)
+    mocker.patch("src.core.utils.common_utils.get_minio_client", return_value=mock_minio)
 
     # Test API endpoint
     response = test_client.get("/videos")
@@ -56,7 +56,7 @@ def test_getvideos_empty_bucket(test_client, mocker):
     mock_minio.ensure_bucket_exists.return_value = None
     mock_minio.list_video_directories.return_value = []
 
-    mocker.patch("src.core.util.get_minio_client", return_value=mock_minio)
+    mocker.patch("src.core.utils.common_utils.get_minio_client", return_value=mock_minio)
 
     # Test API endpoint
     response = test_client.get("/videos")
@@ -77,7 +77,7 @@ def test_getvideos_with_bucket_param(test_client, mocker):
     mock_minio.ensure_bucket_exists.return_value = None
     mock_minio.list_video_directories.return_value = [("video1", ["file1.mp4"])]
 
-    mocker.patch("src.core.util.get_minio_client", return_value=mock_minio)
+    mocker.patch("src.core.utils.common_utils.get_minio_client", return_value=mock_minio)
 
     # Test API endpoint with custom bucket
     custom_bucket = "custom-bucket"

@@ -1,9 +1,11 @@
-import { FC } from 'react';
+// Copyright (C) 2025 Intel Corporation
+// SPDX-License-Identifier: Apache-2.0
+import { FC, useEffect } from 'react';
 import { IconButton } from '@carbon/react';
 import styled from 'styled-components';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '../../redux/store.ts';
-import { SummaryActions, SummarySelector } from '../../redux/summary/summarySlice.ts';
+import { SummaryActions, SummaryLoad, SummarySelector } from '../../redux/summary/summarySlice.ts';
 import SummarySideBarItem from './SummarySideBarItem.tsx';
 import { VideoChunkActions } from '../../redux/summary/videoChunkSlice.ts';
 import { VideoFramesAction } from '../../redux/summary/videoFrameSlice.ts';
@@ -53,6 +55,10 @@ export const SummarySidebar: FC = () => {
     dispatch(VideoFramesAction.selectSummary(stateId));
   };
 
+  useEffect(() => {
+    dispatch(SummaryLoad());
+  }, []);
+
   const sidebarList = sidebarSummaries.map((curr) => (
     <SummarySideBarItem
       item={curr}
@@ -65,7 +71,7 @@ export const SummarySidebar: FC = () => {
 
   return (
     <>
-      <SidebarContainer disabled={false}>
+      <SidebarContainer disabled={false} data-tour="previous-summaries">
         <Navigation>{t('Summaries')}</Navigation>
         <ScrollableContainer>{sidebarList}</ScrollableContainer>
       </SidebarContainer>

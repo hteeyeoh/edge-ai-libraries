@@ -1,4 +1,13 @@
 global:
+  # Set this value to hostPath where we want to mount a volume (Used in single node cluster or standalone sub-chart installation).
+  volumeHostPath: ""
+  
+  # usePvc should be set to true to use a PVC for persisting models, cache and other files.
+  usePvc: false
+
+  # keepPvc should be set to true to retain the PVC after uninstalling the chart.
+  keepPvc: false
+  
   proxy:
     http_proxy: 
     https_proxy: 
@@ -9,13 +18,17 @@ global:
     MINIO_ROOT_USER: 
     MINIO_ROOT_PASSWORD:
 
+# claimSize is the storage size claimed by PVC if usePvc is set to true.
+# claimSize should be set based on the size of models and files expected to be stored.
+claimSize: ""
 
 audioanalyzer:
   name: audioanalyzer
   image:
     repository: intel/audio-analyzer
-    tag: 1.2.0
+    tag: "latest"
     pullPolicy: IfNotPresent
+  resources: {}
   env:
     DEBUG: "false"
     DEFAULT_DEVICE: "cpu"
@@ -24,19 +37,13 @@ audioanalyzer:
     ENABLED_WHISPER_MODELS: "small.en,tiny.en,medium.en"
     DEFAULT_WHISPER_MODEL: "small.en"
     USE_FP16: "true"
+
+  containerPort: 8000  # Port on which container application listens internally
+  containerPortName: audio-port # Optional name to refer containerPort
   service:
-    port: 8000
-    targetPort: 8000
+    port: 8000    # Port on which service listens for incoming connection, if exposed externally
     type: ClusterIP
-  volumeMounts:
-    pvcName: audio-analyzer-pvc
-    modelsPvcName: audio-analyzer-models-pvc
-    egai_audio_analyzer_pvc:
-      size: 20Gi
-      accessMode: ReadWriteOnce
-    egai_audio_analyzer_models_pvc:
-      size: 20Gi
-      accessMode: ReadWriteOnce
+    portName: http    # Service port name. Useful when service exposes multiple ports.
 
 minioServer:
   name: minio-server
@@ -44,3 +51,47 @@ minioServer:
     type: ClusterIP
     port: 9000
     targetPort: 9000
+  resources: {}
+
+
+livenessProbe:
+  httpGet:
+    path: /api/v1/health
+    port: audio-port
+  initialDelaySeconds: 10
+  periodSeconds: 20
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /api/v1/health
+    port: audio-port
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  failureThreshold: 6
+
+# Wait for startup till max ~ 50Mins 
+startupProbe:
+  httpGet:
+    path: /api/v1/health
+    port: audio-port
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  failureThreshold: 300
+
+# Node affinity to schedule pods on specific nodes only
+nodeAffinity: {}
+
+securityContext:
+  fsGroup: 1000
+  runAsUser: 1000
+  runAsGroup: 1000
+
+containerSecurityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: false
+  allowPrivilegeEscalation: false
+  runAsNonRoot: true
+  runAsUser: 1000

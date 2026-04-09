@@ -78,24 +78,18 @@ The program uses a config.json file to customize the video generation process. B
 | **Encoding**  | **Video Format** |
 |---------------|------------------|
 | **H264**      | .mp4             |
-| **HEVC**      | .mp4             |
 | **VP8**       | .webm            |
 | **VP9**       | .webm            |
-| **AV1**       | .mkv             |
 | **MPEG4**     | .avi             |
 | **ProRes**    | .mov             |
-| **Theora**    | .ogg             |
 
 ## Usage
 
 ```bash
-mkdir videos
-chmod o+w videos
-docker compose build videogenerator
-docker compose run --rm videogenerator
+make run-videogenerator
 ```
 
-The video will be generated in the `videos` directory with the specified file name.
+The video will be generated in the `shared/videos/video-generator` directory with the specified file name.
 
 ## Note on Image Naming Convention
 

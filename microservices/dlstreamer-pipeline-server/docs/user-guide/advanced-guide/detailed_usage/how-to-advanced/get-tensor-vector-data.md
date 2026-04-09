@@ -1,6 +1,6 @@
 # Get tensor vector data
 
-DL Streamer Pipeline Server supports extracting tensor data (as python lists) from pipeline models by making use of DL Streamer's `add-tensor-data=true` property for `gvametaconvert` element. Depending upon how gva elements are stacked and whether inference is done on entire frame or on ROIs (Region Of Interest), the metadata json is structured accordingly. Tensor outputs are vector representation of the frame/roi. It can be used by reference applications for various usecases such as image comparison, image description, image classification using custom model, etc. To learn more about the property, read [here](https://github.com/open-edge-platform/edge-ai-libraries/blob/main/libraries/dl-streamer/docs/source/elements/gvametaconvert.md).
+DL Streamer Pipeline Server supports extracting tensor data (as Python lists) from pipeline models by making use of DL Streamer's `add-tensor-data=true` property for `gvametaconvert` element. Depending upon how gva elements are stacked and whether inference is done on entire frame or on ROIs (Region Of Interest), the metadata json is structured accordingly. Tensor outputs are vector representation of the frame/roi. It can be used by reference applications for various use cases such as image comparison, image description, image classification using custom model, etc. To learn more about the element, including its properties, read [here](https://github.com/open-edge-platform/dlstreamer/blob/main/docs/user-guide/elements/gvametaconvert.md).
 
 Follow the below steps to publish tensor vector data along with other metadata via MQTT
 
@@ -13,10 +13,10 @@ Follow the below steps to publish tensor vector data along with other metadata v
 ```
 
 2. Update pipeline present in `[WORKDIR]/edge-ai-libraries/microservices/dlstreamer-pipeline-server/configs/sample_mqtt_publisher/config.json` with the pipeline below (edit the path to model xml and proc json to your needs) -
-    `NOTE` The model used in the below pipeline is from [here](https://github.com/open-edge-platform/edge-ai-libraries/blob/main/libraries/dl-streamer/docs/source/supported_models.md). Please refer the documentation from DL Streamer on how to download it for your usage [here](https://github.com/open-edge-platform/edge-ai-libraries/blob/main/libraries/dl-streamer/docs/source/dev_guide/model_preparation.md)
+    `NOTE` The model used in the below pipeline is from [here](https://github.com/open-edge-platform/dlstreamer/blob/main/docs/user-guide/supported_models.md). Please refer the documentation from DL Streamer on how to download it for your usage [here](https://github.com/open-edge-platform/dlstreamer/blob/main/docs/user-guide/dev_guide/model_preparation.md)
 
     ```sh
-    "pipeline": "{auto_source} name=source ! decodebin ! gvadetect model=/home/pipeline-server/omz/intel/person-vehicle-bike-detection-2004/FP32/person-vehicle-bike-detection-2004.xml model-proc=/opt/intel/dlstreamer/samples/gstreamer/model_proc/intel/person-vehicle-bike-detection-2004.json ! queue ! gvainference model=/home/pipeline-server/resources/models/classification/resnet50/FP16/resnet-50-pytorch.xml inference-region=1 ! queue ! gvametaconvert add-tensor-data=true name=metaconvert ! gvametapublish ! appsink name=destination ",
+    "pipeline": "{auto_source} ! decodebin ! gvadetect model=/home/pipeline-server/omz/intel/person-vehicle-bike-detection-2004/FP32/person-vehicle-bike-detection-2004.xml model-proc=/opt/intel/dlstreamer/samples/gstreamer/model_proc/intel/person-vehicle-bike-detection-2004.json ! queue ! gvainference model=/home/pipeline-server/resources/models/classification/resnet50/FP16/resnet-50-pytorch.xml inference-region=1 ! queue ! gvametaconvert add-tensor-data=true name=metaconvert ! gvametapublish ! appsink name=destination ",
     ```
 
     `NOTE` The property `add-tensor-data` for the dlstreamer element gvametaconvert is set to `true`.
@@ -44,7 +44,7 @@ Follow the below steps to publish tensor vector data along with other metadata v
     }'
     ```
 
-6. You can check the vector output by subscribing to mqtt. You can check this [document](./../../detailed_usage/publisher/eis_mqtt_publish_doc.md#start-mqtt-subscriber) on how to configure and start mqtt subscriber.
+6. You can check the vector output by subscribing to mqtt. You can check this [document](../../detailed_usage/publisher/mqtt_publish.md#start-mqtt-subscriber) on how to configure and start mqtt subscriber.
 
     Here's what a sample metadata for a frame looks like (some data deleted to keep size small).
     ```sh

@@ -1,1 +1,1 @@
-Please refer [link](../docs/user-guide/how-to-deploy-with-helm.md) for helm deployment
+Please refer to the following [link](https://docs.openedgeplatform.intel.com/dev/edge-ai-libraries/time-series-analytics/get-started/deploy-with-helm.html) for the Helm deployment.

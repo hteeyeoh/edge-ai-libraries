@@ -1,7 +1,7 @@
 # Copyright (C) 2025 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
-FROM python:3.12.10-slim AS build
+FROM python:3.12.12-slim AS build
 
 RUN pip install --upgrade --no-cache-dir pip setuptools
 
@@ -13,9 +13,9 @@ COPY pyproject.toml poetry.lock /app/
 
 RUN poetry config virtualenvs.create false && poetry install --no-root --only=main
 
-FROM python:3.12.10-slim
+FROM python:3.12.12-slim
 
-ARG INSTALL_DRIVER_VERSION="24.39.31294"
+ARG INSTALL_DRIVER_VERSION="25.48.36300"
 ARG USER_ID=1000
 ARG USER_GROUP_ID=1000
 
@@ -55,7 +55,7 @@ RUN if [ "$COPYLEFT_SOURCES" = "true" ]; then \
         # Get source code for installed Python packages with copyleft licenses \
         mkdir -p /copyleft_sources/python && \
         cd /copyleft_sources/python && \
-        apt-get update && apt-get install -y gcc build-essential libffi-dev python3-dev && \
+        apt-get update && apt-get install --no-install-recommends -y gcc build-essential libffi-dev python3-dev && \
         # Download python package sources with relevant licenses \
         pip3 freeze | cut -d= -f1 | while read pkg; do \
             meta=$(pip3 show $pkg 2>/dev/null); \
@@ -73,7 +73,7 @@ COPY . .
 RUN chmod +x /app/scripts/compress_model.sh
 
 RUN mkdir -p /home/appuser/.cache/huggingface /app/ov-model && \
-    chown -R appuser:appuser /home/appuser/.cache /app/ov-model
+    chown -R appuser:appuser /home/appuser/.cache /app/ov-model /opt
 
 USER appuser
 

@@ -14,12 +14,36 @@ spec:
       labels:
         app: {{ .Values.audioanalyzer.name }}
     spec:
+      {{- with .Values.nodeAffinity }}
+      affinity:
+        nodeAffinity:
+          {{- toYaml . | nindent 10 }}
+      {{- end }}
+      {{- with .Values.securityContext }}
+      securityContext:
+        {{- toYaml . | nindent 10 }}
+      {{- end }}
       containers:
-        - name: {{ .Values.audioanalyzer.name }}
+        - name: {{ .Chart.Name }}
           image: "{{ .Values.audioanalyzer.image.repository }}:{{ .Values.audioanalyzer.image.tag }}"
           imagePullPolicy: {{ .Values.audioanalyzer.image.pullPolicy }}
+          {{- with .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
-            - containerPort: {{ .Values.audioanalyzer.service.targetPort }}
+            - containerPort: {{ .Values.audioanalyzer.containerPort }}
+              name: {{ .Values.audioanalyzer.containerPortName }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          startupProbe:
+            {{- toYaml .Values.startupProbe | nindent 12 }}
+          {{- with .Values.audioanalyzer.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           env:
             - name: DEBUG
               value: {{ .Values.audioanalyzer.env.DEBUG | quote }}
@@ -48,16 +72,19 @@ spec:
             - name: https_proxy
               value: {{ .Values.global.proxy.https_proxy | quote }}
             - name: no_proxy
-              value: "{{ .Values.global.proxy.no_proxy }},localhost,127.0.0.1,audioanalyzer,vlm-inference-microservice,videosummarybackend,videoingestion,minio-server,postgresql,video-summary-nginx,rabbitmq,multimodal-embedding-ms,vdms-dataprep,vdms-vectordb,videosearch,.svc.cluster.local"
+              value: "{{ .Values.global.proxy.no_proxy }},localhost,127.0.0.1,audioanalyzer,vlm-inference-microservice,pipelinemanager,videoingestion,minio-server,postgresql,video-summary-nginx,rabbitmq,multimodal-embedding-ms,vdms-dataprep,vdms-vectordb,videosearch,.svc.cluster.local"
           volumeMounts:
-            - name: data-volume
+            - name: audio-volume
               mountPath: /data
-            - name: models-volume
-              mountPath: /models
       volumes:
-        - name: data-volume
+        - name: audio-volume
+          {{- if .Values.global.usePvc }}
           persistentVolumeClaim:
-            claimName: {{ .Values.audioanalyzer.volumeMounts.pvcName }}
-        - name: models-volume
-          persistentVolumeClaim:
-            claimName: {{ .Values.audioanalyzer.volumeMounts.modelsPvcName }}
+            claimName: {{ include "audioanalyzer.fullname" . }}-pvc
+          {{- else if .Values.global.volumeHostPath }}
+          hostPath:
+            path: {{ .Values.global.volumeHostPath }}
+            type: DirectoryOrCreate
+          {{- else }}
+          emptyDir: {}
+          {{- end }}

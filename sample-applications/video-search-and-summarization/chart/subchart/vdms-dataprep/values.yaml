@@ -1,5 +1,33 @@
 # Default values for VDMS DataPrep Service.
 
+global:
+  # Set this value to hostPath where we want to mount a volume (Used in single node cluster or standalone sub-chart installation).
+  volumeHostPath: ""
+
+  # usePvc should be set to true to use a PVC for persisting models, cache and other files.
+  usePvc: false
+
+  # keepPvc should be set to true to retain the PVC after uninstalling the chart.
+  keepPvc: false
+
+  # sharedPvcName is the PVC shared by VDMS Dataprep and Multimodel-Embedding-MS subcharts.
+  sharedPvcName: ""
+
+  # Common release tags to be used for several dependencies
+  commonTag: ""
+
+  # vdmsIndexName is the DB Index or DB Collection name used by VDMS Vector DB.
+  vdmsIndexName: ""
+
+  proxy:
+    # setup proxy settings
+    no_proxy: ""
+    http_proxy: ""
+    https_proxy: ""
+  env:
+    MINIO_ROOT_USER:
+    MINIO_ROOT_PASSWORD:
+
 replicaCount: 1
 
 image:
@@ -7,8 +35,7 @@ image:
   # This sets the pull policy for images.
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "1.2.0"
-
+  tag: "latest"
 imagePullSecrets: []
 # This is to override the chart name.
 nameOverride: ""
@@ -17,72 +44,100 @@ fullnameOverride: ""
 podAnnotations: {}
 podLabels: {}
 
-podSecurityContext: {}
+podSecurityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  fsGroupChangePolicy: OnRootMismatch
 securityContext:
   capabilities:
     drop:
-    - ALL
+      - ALL
   readOnlyRootFilesystem: true
   allowPrivilegeEscalation: false
-  runAsNonRoot: false
-  runAsUser: 0
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
   seccompProfile:
-    type: RuntimeDefault    
+    type: RuntimeDefault
 
+containerPort: 8000 # Port on which container application listens internally
+containerPortName: dataprep-port # Optional name to refer containerPort
 service:
   type: ClusterIP
-  name: dataprep-port
-  port: 8000
+  port: 8000 # Port on which service listens for incoming connection, if exposed externally
+  portName: http # Service port name. Useful when service exposes multiple ports.
 
 resources: {}
+
+modelPvc:
+  enabled: true
+  existingClaim: ""
+  storageClassName: ""
+  accessModes:
+    - ReadWriteOnce
+  size: "10Gi"
 
 livenessProbe:
   httpGet:
     path: /health
-    port: 8000
+    port: dataprep-port
+  initialDelaySeconds: 20
   periodSeconds: 20
-  failureThreshold: 15
+  failureThreshold: 6
 readinessProbe:
   httpGet:
     path: /health
-    port: 8000
+    port: dataprep-port
+  initialDelaySeconds: 10
   periodSeconds: 10
-  failureThreshold: 6
-
+  failureThreshold: 12
+startupProbe:
+  httpGet:
+    path: /health
+    port: dataprep-port
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  failureThreshold: 12
 
 nodeSelector: {}
-
 tolerations: []
-
 affinity: {}
 
+podAffinity:
+  requiredDuringSchedulingIgnoredDuringExecution:
+    - labelSelector:
+        matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+              - vdmsdataprep
+      topologyKey: "kubernetes.io/hostname"
+
 # Values required to configure DataPrep service
-bucketName: "vdms-bucket"
 indexName: "videosearch-index"
 vdmsVectorDbHost: "vdms-vectordb"
 vdmsVectorDbPort: 55555
-multimodalEmbeddingModelName: "openai/clip-vit-base-patch32"
-multimodalEmbeddingNumFrames: 64
-
-global:
-  # Set this value to hostPath where we want to mount a volume (Used in single node cluster).
-  volumeHostPath: ""
-
-  # Set the PVC name here if storage sub-chart is enabled (Used in single/multi node cluster).
-  pvcName: "vss-shared-pvc"
-  # Nodes on which pods using the PV will be scheduled
-  storageNodeAffinity: []
-
-  # Common release tags to be used for several dependencies 
-  commonTag: ""
-  proxy:
-  # setup proxy settings
-    http_proxy: ""
-    https_proxy: ""
-  env:
-    MINIO_ROOT_USER:
-    MINIO_ROOT_PASSWORD:
-
+multimodalEmbeddingModelName: ""
+multimodalEmbeddingEndpoint: "http://multimodal-embedding-ms:8000/embeddings"
+defaultBucketName: "video-summary"
+logLevel: "INFO"
+cors:
+  allowOrigins: "*"
+  allowMethods: "*"
+  allowHeaders: "*"
+embedding:
+  processingMode: "sdk"
+  sdkUseOpenVino: true
+  device: "CPU"
+  ovModelsDir: "/app/ov_models"
+  ovPerformanceMode: "THROUGHPUT"
+frameProcessing:
+  frameInterval: 15
+  enableObjectDetection: true
+  detectionConfidence: 0.85
+  detectionModelDir: "/app/models/yolox"
+  framesTempDir: "/tmp/dataprep"
 
 minioServer:
   name: minio-server

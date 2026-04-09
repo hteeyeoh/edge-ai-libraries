@@ -1,12 +1,12 @@
 // Copyright (C) 2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
-
 import { Test, TestingModule } from '@nestjs/testing';
 import { RabbitmqService } from './rabbitmq.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
 import { PipelineEvents } from '../../events/Pipeline.events';
 import Connection, { Consumer } from 'rabbitmq-client';
+import { FeaturesService } from 'src/features/features.service';
 
 // Create mocks
 jest.mock('rabbitmq-client', () => {
@@ -33,7 +33,8 @@ describe('RabbitmqService', () => {
 
   // Mock config values
   const mockConfig = {
-    'rmq.host': 'localhost:5672',
+    'rmq.host': 'localhost',
+    'rmq.amqpPort': 5672,
     'rmq.username': 'guest',
     'rmq.password': 'guest',
     'evam.rmq.queue': 'test-queue',
@@ -60,6 +61,12 @@ describe('RabbitmqService', () => {
             emit: jest.fn(),
           },
         },
+        {
+          provide: FeaturesService,
+          useValue: {
+            hasFeature: jest.fn().mockReturnValue(true),
+          },
+        },
       ],
     }).compile();
 
@@ -84,7 +91,7 @@ describe('RabbitmqService', () => {
 
       // Verify connection was created with correct URL
       expect(Connection).toHaveBeenCalledWith(
-        `amqp://${mockConfig['rmq.username']}:${mockConfig['rmq.password']}@${mockConfig['rmq.host']}`,
+        `amqp://${mockConfig['rmq.username']}:${mockConfig['rmq.password']}@${mockConfig['rmq.host']}:${mockConfig['rmq.amqpPort']}`,
       );
 
       // Verify event listener was added
@@ -256,10 +263,15 @@ describe('RabbitmqService', () => {
       const connectSpy = jest
         .spyOn(RabbitmqService.prototype, 'connect')
         .mockImplementation();
-
+      
+      const mockFeaturesService = {
+        hasFeature: jest.fn().mockReturnValue(true),
+      };
+      
       const testService = new RabbitmqService(
         eventEmitter as any,
         configService as any,
+        mockFeaturesService as any,
       );
 
       expect(connectSpy).toHaveBeenCalled();

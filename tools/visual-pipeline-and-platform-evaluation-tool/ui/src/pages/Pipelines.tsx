@@ -1,0 +1,862 @@
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import {
+  useConvertSimpleToAdvancedMutation,
+  useGetPerformanceJobStatusQuery,
+  useGetPipelineQuery,
+  useRunPerformanceTestMutation,
+  useStopPerformanceTestJobMutation,
+  useUpdateVariantMutation,
+} from "@/api/api.generated";
+import { PipelineVariantSelect } from "@/features/pipelines/PipelineVariantSelect";
+import {
+  type Edge as ReactFlowEdge,
+  type Node as ReactFlowNode,
+  type Viewport,
+} from "@xyflow/react";
+import { useEffect, useRef, useState } from "react";
+import PipelineEditor, {
+  type PipelineEditorHandle,
+} from "@/features/pipeline-editor/PipelineEditor.tsx";
+import { useUndoRedo } from "@/hooks/useUndoRedo";
+import { useAsyncJob } from "@/hooks/useAsyncJob";
+import NodeDataPanel from "@/features/pipeline-editor/NodeDataPanel.tsx";
+import RunPipelineButton from "@/features/pipeline-editor/RunPerformanceTestButton.tsx";
+import StopPipelineButton from "@/features/pipeline-editor/StopPipelineButton.tsx";
+import PerformanceTestPanel from "@/features/pipeline-editor/PerformanceTestPanel.tsx";
+import { toast } from "sonner";
+import ViewModeSwitcher from "@/features/pipeline-editor/ViewModeSwitcher.tsx";
+import { PipelineActionsMenu } from "@/features/pipeline-editor/PipelineActionsMenu";
+import {
+  handleApiError,
+  handleAsyncJobError,
+  isAsyncJobError,
+} from "@/lib/apiUtils";
+import type { OutputMode } from "@/api/api.generated";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import {
+  ArrowLeft,
+  Eye,
+  Film,
+  Infinity as InfinityIcon,
+  Redo2,
+  Save,
+  SlidersHorizontal,
+  Timer,
+  Undo2,
+} from "lucide-react";
+import { PipelineName } from "@/features/pipelines/PipelineName.tsx";
+type UrlParams = {
+  id: string;
+  variant: string;
+};
+
+// Helper function to detect if nodes contain camera input
+const containsCameraInput = (nodes: ReactFlowNode[]): boolean => {
+  return nodes.some((node) => {
+    if (node.type === "source") {
+      const sourceType = (node.data as { source?: string })?.source || "";
+      // Check if it's a camera: /dev/video* or rtsp://
+      return sourceType.startsWith("/dev/") || sourceType.startsWith("rtsp://");
+    }
+    return false;
+  });
+};
+
+export const Pipelines = () => {
+  const DEFAULT_LOOPING_RUNTIME_SECONDS = 60;
+  const { id, variant } = useParams<UrlParams>();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const source = searchParams.get("source");
+  const [currentViewport, setCurrentViewport] = useState<Viewport | undefined>(
+    undefined,
+  );
+  const [editorKey, setEditorKey] = useState(0);
+  const [shouldFitView, setShouldFitView] = useState(false);
+  const [videoOutputEnabled, setVideoOutputEnabled] = useState(true);
+  const [livePreviewEnabled, setLivePreviewEnabled] = useState(false);
+  const [loopingEnabled, setLoopingEnabled] = useState(false);
+  const [loopingRuntimeSeconds, setLoopingRuntimeSeconds] = useState(
+    DEFAULT_LOOPING_RUNTIME_SECONDS,
+  );
+  const [loopingRuntimeInput, setLoopingRuntimeInput] = useState(
+    String(DEFAULT_LOOPING_RUNTIME_SECONDS),
+  );
+  const [streams, setStreams] = useState(1);
+  const [streamsInput, setStreamsInput] = useState("1");
+  const [isSimpleMode, setIsSimpleMode] = useState(true);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [completedVideoPath, setCompletedVideoPath] = useState<string | null>(
+    null,
+  );
+  const [showDetailsPanel, setShowDetailsPanel] = useState(false);
+  const [selectedNode, setSelectedNode] = useState<ReactFlowNode | null>(null);
+  const nodeDetailsPanelSizeRef = useRef(24);
+  const runPanelSizeRef = useRef(35);
+  const detailsPanelRef = useRef<HTMLDivElement>(null);
+  const isResizingRef = useRef(false);
+  const pipelineEditorRef = useRef<PipelineEditorHandle>(null);
+
+  const {
+    currentNodes,
+    currentEdges,
+    canUndo,
+    canRedo,
+    handleNodesChange,
+    handleEdgesChange,
+    setCurrentNodes,
+    setCurrentEdges,
+    undo: undoHistory,
+    redo: redoHistory,
+    resetHistory,
+  } = useUndoRedo();
+
+  const { data, isSuccess, refetch } = useGetPipelineQuery(
+    {
+      pipelineId: id ?? "",
+    },
+    {
+      skip: !id,
+    },
+  );
+
+  const [stopPerformanceTest, { isLoading: isStopping }] =
+    useStopPerformanceTestJobMutation();
+  const [convertSimpleToAdvanced] = useConvertSimpleToAdvancedMutation();
+  const [updateVariant] = useUpdateVariantMutation();
+
+  const {
+    execute: runPipeline,
+    isLoading: isPipelineRunning,
+    isJobCancelled,
+    jobStatus,
+  } = useAsyncJob({
+    asyncJobHook: useRunPerformanceTestMutation,
+    statusCheckHook: useGetPerformanceJobStatusQuery,
+  });
+
+  // Reset editor state when variant changes
+  useEffect(() => {
+    setCurrentNodes([]);
+    setCurrentEdges([]);
+    setCurrentViewport(undefined);
+    setShouldFitView(true);
+    setEditorKey((prev) => prev + 1);
+    setSelectedNode(null);
+    setShowDetailsPanel(false);
+    setCompletedVideoPath(null);
+    resetHistory();
+  }, [variant, resetHistory, setCurrentNodes, setCurrentEdges]);
+
+  const handleViewportChange = (viewport: Viewport) => {
+    setCurrentViewport(viewport);
+  };
+
+  const isUndoRedoRef = useRef(false);
+
+  const undo = () => {
+    isUndoRedoRef.current = true;
+    undoHistory();
+  };
+
+  const redo = () => {
+    isUndoRedoRef.current = true;
+    redoHistory();
+  };
+
+  useEffect(() => {
+    if (isUndoRedoRef.current && pipelineEditorRef.current) {
+      pipelineEditorRef.current.setNodes(currentNodes);
+      pipelineEditorRef.current.setEdges(currentEdges);
+      isUndoRedoRef.current = false;
+    }
+  }, [currentNodes, currentEdges]);
+
+  const handleSave = async () => {
+    if (!id || !variant) return;
+
+    try {
+      const graphData = {
+        nodes: currentNodes.map((node) => ({
+          id: node.id,
+          type: node.type ?? "",
+          data: node.data as { [key: string]: string },
+        })),
+        edges: currentEdges.map((edge) => ({
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
+        })),
+      };
+
+      await updateVariant({
+        pipelineId: id,
+        variantId: variant,
+        variantUpdate: isSimpleMode
+          ? { pipeline_graph_simple: graphData }
+          : { pipeline_graph: graphData },
+      }).unwrap();
+
+      resetHistory();
+    } catch (error) {
+      handleApiError(error, "Failed to save variant");
+      console.error("Failed to save variant:", error);
+    }
+  };
+
+  const handleNodeSelect = (node: ReactFlowNode | null) => {
+    if (jobStatus?.state === "RUNNING") {
+      return;
+    }
+
+    setSelectedNode(node);
+    setShowDetailsPanel(!!node);
+
+    if (node) {
+      setCompletedVideoPath(null);
+    }
+  };
+
+  const handleNodeDataUpdate = (
+    nodeId: string,
+    updatedData: Record<string, unknown>,
+  ) => {
+    pipelineEditorRef.current?.updateNodeData(nodeId, updatedData);
+
+    setCurrentNodes((prevNodes) =>
+      prevNodes.map((node) =>
+        node.id === nodeId ? { ...node, data: updatedData } : node,
+      ),
+    );
+
+    if (selectedNode && selectedNode.id === nodeId) {
+      setSelectedNode({ ...selectedNode, data: updatedData });
+    }
+  };
+
+  const handleRunPipeline = async () => {
+    if (!id || !variant) return;
+
+    setCompletedVideoPath(null);
+    setShowDetailsPanel(true);
+    setSelectedNode(null);
+
+    try {
+      const hasCameraInput = containsCameraInput(currentNodes);
+      const adjustedLivePreviewMaxRuntime = hasCameraInput ? 0 : 30 * 60;
+      const maxRuntimeSeconds = livePreviewEnabled
+        ? adjustedLivePreviewMaxRuntime
+        : loopingEnabled
+          ? Number.isNaN(loopingRuntimeSeconds)
+            ? DEFAULT_LOOPING_RUNTIME_SECONDS
+            : Math.max(1, loopingRuntimeSeconds)
+          : 0;
+
+      const outputMode: OutputMode = livePreviewEnabled
+        ? "live_stream"
+        : videoOutputEnabled
+          ? "file"
+          : "disabled";
+
+      const graphData = {
+        nodes: currentNodes.map((node) => ({
+          id: node.id,
+          type: node.type ?? "",
+          data: node.data as { [key: string]: string },
+        })),
+        edges: currentEdges.map((edge) => ({
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
+        })),
+      };
+
+      let payloadGraphData = graphData;
+      if (isSimpleMode) {
+        payloadGraphData = await convertSimpleToAdvanced({
+          pipelineId: id,
+          variantId: variant,
+          pipelineGraph: graphData,
+        }).unwrap();
+      }
+
+      toast.success("Pipeline run started", {
+        description: new Date().toISOString(),
+      });
+
+      const status = await runPipeline({
+        performanceTestSpec: {
+          pipeline_performance_specs: [
+            {
+              pipeline: {
+                source: "graph",
+                pipeline_graph: payloadGraphData,
+              },
+              streams,
+            },
+          ],
+          execution_config: {
+            output_mode: outputMode,
+            max_runtime: maxRuntimeSeconds,
+          },
+        },
+      });
+
+      if (isJobCancelled(status)) {
+        toast.info("Pipeline run cancelled", {
+          description: new Date().toISOString(),
+        });
+      } else {
+        toast.success("Pipeline run completed", {
+          description: new Date().toISOString(),
+        });
+      }
+
+      if (videoOutputEnabled && status.video_output_paths) {
+        const paths = Object.values(status.video_output_paths)[0];
+        if (paths && paths.length > 0) {
+          const videoPath = [...paths].pop();
+          if (videoPath) {
+            setCompletedVideoPath(videoPath);
+          }
+        }
+      }
+    } catch (error) {
+      if (isAsyncJobError(error)) {
+        handleAsyncJobError(error, "Pipeline run");
+      } else {
+        handleApiError(error, "Failed to start pipeline");
+      }
+      console.error("Failed to start pipeline:", error);
+    }
+  };
+
+  const handleStopPipeline = async () => {
+    if (!jobStatus?.id) return;
+
+    try {
+      await stopPerformanceTest({
+        jobId: jobStatus.id,
+      }).unwrap();
+      setCompletedVideoPath(null);
+    } catch (error) {
+      handleApiError(error, "Failed to stop pipeline");
+      console.error("Failed to stop pipeline:", error);
+    }
+  };
+
+  const updateGraph = (
+    nodes: ReactFlowNode[],
+    edges: ReactFlowEdge[],
+    viewport: Viewport,
+    shouldFitView: boolean,
+  ) => {
+    setCurrentNodes(nodes);
+    setCurrentEdges(edges);
+    setCurrentViewport(viewport);
+    setShouldFitView(shouldFitView);
+    setEditorKey((prev) => prev + 1); // Force PipelineEditor to re-initialize
+  };
+
+  useEffect(() => {
+    if (!showDetailsPanel) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isResizingRef.current) return;
+
+      const target = event.target as HTMLElement;
+
+      if (
+        detailsPanelRef.current &&
+        !detailsPanelRef.current.contains(target)
+      ) {
+        const isResizeHandle =
+          target.closest("[data-resize-handle]") ||
+          target.closest("[data-resize-handle-active]") ||
+          target.closest('[role="separator"]') ||
+          target.getAttribute("data-resize-handle") !== null;
+
+        if (!isResizeHandle) {
+          if (jobStatus?.state !== "RUNNING" && !completedVideoPath) {
+            setShowDetailsPanel(false);
+            setSelectedNode(null);
+          }
+        }
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showDetailsPanel, jobStatus?.state, completedVideoPath]);
+
+  if (isSuccess && data) {
+    const detailsPanelType: "node" | "run" | null = showDetailsPanel
+      ? selectedNode
+        ? "node"
+        : "run"
+      : null;
+    const activePanelSize =
+      detailsPanelType === "node"
+        ? nodeDetailsPanelSizeRef.current
+        : detailsPanelType === "run"
+          ? runPanelSizeRef.current
+          : 0;
+    const currentVariantData = data.variants.find((v) => v.id === variant);
+    const isReadOnly = currentVariantData?.read_only ?? false;
+
+    const editorContent = (
+      <div className="w-full h-full relative">
+        <div
+          className="w-full h-full transition-opacity duration-100"
+          style={{ opacity: isTransitioning ? 0 : 1 }}
+        >
+          <PipelineEditor
+            ref={pipelineEditorRef}
+            key={editorKey}
+            pipelineData={data}
+            variant={variant}
+            onNodesChange={handleNodesChange}
+            onEdgesChange={handleEdgesChange}
+            onViewportChange={handleViewportChange}
+            onNodeSelect={handleNodeSelect}
+            initialNodes={currentNodes.length > 0 ? currentNodes : undefined}
+            initialEdges={currentEdges.length > 0 ? currentEdges : undefined}
+            initialViewport={currentViewport}
+            shouldFitView={shouldFitView}
+            isSimpleGraph={isSimpleMode}
+            showDetailsPanel={showDetailsPanel}
+            detailsPanelType={detailsPanelType}
+          />
+        </div>
+      </div>
+    );
+
+    return (
+      <div className="flex flex-col h-full w-full">
+        <header className="flex h-[60px] shrink-0 items-center gap-2 justify-between transition-[width,height] ease-linear border-b">
+          <div className="flex flex-wrap items-center gap-2 px-2">
+            <Link
+              to={source === "dashboard" ? "/" : "/pipelines"}
+              className="p-2 hover:bg-accent rounded transition-colors"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+            {id && <PipelineName pipelineId={id} />}
+            {id && variant && (
+              <PipelineVariantSelect
+                pipelineId={id}
+                currentVariant={variant}
+                variants={data.variants}
+                source={source}
+                hasUnsavedChanges={canUndo}
+              />
+            )}
+          </div>
+          <div className="flex items-center gap-2 px-4">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={undo}
+                  disabled={!canUndo}
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Undo"
+                >
+                  <Undo2 className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p>Undo (Ctrl+Z)</p>
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={redo}
+                  disabled={!canRedo}
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Redo"
+                >
+                  <Redo2 className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p>Redo (Ctrl+Y)</p>
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={handleSave}
+                  disabled={isReadOnly || !canUndo}
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Save"
+                >
+                  <Save className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p>
+                  {isReadOnly
+                    ? "Read-only variant cannot be saved."
+                    : !canUndo
+                      ? "No changes to save"
+                      : "Save (Ctrl+S)"}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+
+            {id && variant && (
+              <Popover>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Pipeline options"
+                      >
+                        <SlidersHorizontal className="h-5 w-5" />
+                      </Button>
+                    </PopoverTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p>Pipeline options</p>
+                  </TooltipContent>
+                </Tooltip>
+
+                <PopoverContent
+                  align="start"
+                  className="w-[420px] p-4 rounded-none"
+                >
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                        View mode
+                      </p>
+                      <ViewModeSwitcher
+                        pipelineId={id}
+                        variant={variant}
+                        isPredefined={data.source === "PREDEFINED"}
+                        isSimpleMode={isSimpleMode}
+                        currentNodes={currentNodes}
+                        currentEdges={currentEdges}
+                        hasUnsavedChanges={canUndo}
+                        onModeChange={setIsSimpleMode}
+                        onTransitionStart={() => setIsTransitioning(true)}
+                        onTransitionEnd={() => setIsTransitioning(false)}
+                        onClearGraph={() => {
+                          setCurrentNodes([]);
+                          setCurrentEdges([]);
+                        }}
+                        onRefetch={refetch}
+                        onEditorKeyChange={() =>
+                          setEditorKey((prev) => prev + 1)
+                        }
+                        onResetHistory={resetHistory}
+                      />
+                    </div>
+
+                    <Separator />
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Pipeline run options
+                    </p>
+
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-sm">
+                        <span>Streams</span>
+                      </div>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={streamsInput}
+                        onChange={(event) => {
+                          const value = event.target.value;
+
+                          if (value !== "" && !/^\d+$/.test(value)) {
+                            return;
+                          }
+
+                          setStreamsInput(value);
+
+                          if (value === "") {
+                            return;
+                          }
+
+                          const parsedValue = Number.parseInt(value, 10);
+
+                          const normalizedValue = Math.min(
+                            12,
+                            Math.max(1, parsedValue),
+                          );
+                          setStreams(normalizedValue);
+                        }}
+                        onBlur={() => {
+                          const parsedValue =
+                            streamsInput.trim().length === 0
+                              ? Number.NaN
+                              : Number.parseInt(streamsInput, 10);
+
+                          const normalizedValue = Number.isFinite(parsedValue)
+                            ? Math.min(12, Math.max(1, parsedValue))
+                            : 1;
+
+                          setStreams(normalizedValue);
+                          setStreamsInput(String(normalizedValue));
+                        }}
+                        className="h-8 w-24 px-2 text-sm bg-background dark:bg-input/60"
+                      />
+                    </div>
+
+                    {!containsCameraInput(currentNodes) && (
+                      <>
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 text-sm">
+                            <InfinityIcon className="h-4 w-4 text-muted-foreground" />
+                            <span>Run pipeline in loop</span>
+                          </div>
+                          <Switch
+                            checked={loopingEnabled}
+                            onCheckedChange={(checked) => {
+                              setLoopingEnabled(checked);
+                              if (checked) {
+                                setVideoOutputEnabled(false);
+                                setLivePreviewEnabled(false);
+                              }
+                            }}
+                          />
+                        </div>
+
+                        {loopingEnabled && (
+                          <div className="ml-6 flex items-center gap-2">
+                            <Timer className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">
+                              Duration
+                            </span>
+                            <Input
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              value={loopingRuntimeInput}
+                              onChange={(event) => {
+                                const value = event.target.value;
+
+                                if (value !== "" && !/^\d+$/.test(value)) {
+                                  return;
+                                }
+
+                                setLoopingRuntimeInput(value);
+
+                                if (value === "") {
+                                  return;
+                                }
+
+                                const parsedValue = Number.parseInt(value, 10);
+                                setLoopingRuntimeSeconds(parsedValue);
+                              }}
+                              onBlur={() => {
+                                const parsedValue =
+                                  loopingRuntimeInput.trim().length === 0
+                                    ? Number.NaN
+                                    : Number.parseInt(loopingRuntimeInput, 10);
+                                const normalizedValue =
+                                  Number.isFinite(parsedValue) &&
+                                  parsedValue >= 1
+                                    ? parsedValue
+                                    : DEFAULT_LOOPING_RUNTIME_SECONDS;
+
+                                setLoopingRuntimeSeconds(normalizedValue);
+                                setLoopingRuntimeInput(String(normalizedValue));
+                              }}
+                              className="h-8 w-24 px-2 text-xs bg-background dark:bg-input/60"
+                            />
+                            <span className="text-xs text-muted-foreground">
+                              s
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Film className="h-4 w-4 text-muted-foreground" />
+                          <span>Keep pipeline output</span>
+                        </div>
+                        <Switch
+                          checked={videoOutputEnabled}
+                          onCheckedChange={(checked) => {
+                            setVideoOutputEnabled(checked);
+                            if (checked) {
+                              setLivePreviewEnabled(false);
+                              setLoopingEnabled(false);
+                            }
+                          }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                          <span>Enable live preview</span>
+                        </div>
+                        <Switch
+                          checked={livePreviewEnabled}
+                          onCheckedChange={(checked) => {
+                            setLivePreviewEnabled(checked);
+                            if (checked) {
+                              setVideoOutputEnabled(false);
+                              setLoopingEnabled(false);
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
+
+            <Separator orientation="vertical" className="h-6" />
+
+            {jobStatus?.state === "RUNNING" ? (
+              <StopPipelineButton
+                isStopping={isStopping}
+                onStop={handleStopPipeline}
+              />
+            ) : (
+              <RunPipelineButton
+                onRun={handleRunPipeline}
+                isRunning={isPipelineRunning}
+              />
+            )}
+            <PipelineActionsMenu
+              pipeline={data}
+              variantId={variant!}
+              currentNodes={currentNodes}
+              currentEdges={currentEdges}
+              currentViewport={currentViewport}
+              isSimpleMode={isSimpleMode}
+              isReadOnly={isReadOnly}
+              performanceTestJobId={jobStatus?.id ?? null}
+              onGraphUpdate={updateGraph}
+              onVariantRenamed={() => {
+                refetch();
+              }}
+              onVariantDeleted={() => {
+                const remainingVariants = data.variants.filter(
+                  (v) => v.id !== variant,
+                );
+                const firstVariant = remainingVariants[0];
+                if (firstVariant) {
+                  navigate(`/pipelines/${id}/${firstVariant.id}`);
+                } else {
+                  navigate("/pipelines");
+                }
+              }}
+            />
+          </div>
+        </header>
+        <div className="flex-1 overflow-hidden">
+          <ResizablePanelGroup
+            orientation="horizontal"
+            className="w-full h-full"
+          >
+            <ResizablePanel
+              defaultSize={showDetailsPanel ? 100 - activePanelSize : 100}
+              minSize={30}
+            >
+              {editorContent}
+            </ResizablePanel>
+
+            {detailsPanelType === "run" && (
+              <>
+                <ResizableHandle withHandle />
+
+                <ResizablePanel
+                  defaultSize={runPanelSizeRef.current}
+                  minSize={900}
+                  onResize={(size) => {
+                    if (typeof size === "number") {
+                      runPanelSizeRef.current = size;
+                    }
+                  }}
+                >
+                  <div
+                    ref={detailsPanelRef}
+                    className="w-full h-full bg-background overflow-auto relative"
+                  >
+                    <PerformanceTestPanel
+                      isRunning={jobStatus?.state === "RUNNING"}
+                      completedVideoPath={completedVideoPath}
+                      livePreviewEnabled={livePreviewEnabled}
+                      liveStreamUrl={
+                        Object.values(jobStatus?.live_stream_urls ?? {})[0] ??
+                        null
+                      }
+                    />
+                  </div>
+                </ResizablePanel>
+              </>
+            )}
+
+            {detailsPanelType === "node" && (
+              <>
+                <ResizableHandle withHandle />
+
+                <ResizablePanel
+                  defaultSize={nodeDetailsPanelSizeRef.current}
+                  minSize={400}
+                  onResize={(size) => {
+                    if (typeof size === "number") {
+                      nodeDetailsPanelSizeRef.current = size;
+                    }
+                  }}
+                >
+                  <div
+                    ref={detailsPanelRef}
+                    className="w-full h-full bg-background overflow-auto relative"
+                  >
+                    <NodeDataPanel
+                      selectedNode={selectedNode}
+                      onNodeDataUpdate={handleNodeDataUpdate}
+                    />
+                  </div>
+                </ResizablePanel>
+              </>
+            )}
+          </ResizablePanelGroup>
+        </div>
+      </div>
+    );
+  }
+
+  return <div>Loading pipeline: {id}</div>;
+};

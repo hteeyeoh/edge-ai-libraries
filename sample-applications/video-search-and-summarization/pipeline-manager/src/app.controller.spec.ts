@@ -1,9 +1,9 @@
 // Copyright (C) 2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
-
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppController } from './app.controller';
 import { AppConfigService } from './video-upload/services/app-config.service';
+import { FeaturesService } from './features/features.service';
 
 describe('AppController', () => {
   let appController: AppController;
@@ -17,12 +17,20 @@ describe('AppController', () => {
       }),
     };
 
+    const mockFeaturesService = {
+      getFeatures: jest.fn().mockReturnValue({}),
+    };
+
     const app: TestingModule = await Test.createTestingModule({
       controllers: [AppController],
       providers: [
         {
           provide: AppConfigService,
           useValue: mockAppConfigService,
+        },
+        {
+          provide: FeaturesService,
+          useValue: mockFeaturesService,
         },
       ],
     }).compile();

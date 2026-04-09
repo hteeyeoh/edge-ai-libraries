@@ -1,0 +1,307 @@
+import {
+  Background,
+  BackgroundVariant,
+  Controls,
+  type Edge as ReactFlowEdge,
+  type Node as ReactFlowNode,
+  type NodeMouseHandler,
+  ReactFlow,
+  ReactFlowProvider,
+  useEdgesState,
+  useNodesState,
+  useReactFlow,
+  type Viewport,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useState,
+} from "react";
+import { nodeTypes } from "@/features/pipeline-editor/nodes";
+import { type Pipeline } from "@/api/api.generated";
+import {
+  createGraphLayout,
+  LayoutDirection,
+} from "@/features/pipeline-editor/utils/graphLayout";
+import { useTheme } from "next-themes";
+import { PipelineEditorContext } from "./PipelineEditorContext.ts";
+
+export interface PipelineEditorHandle {
+  updateNodeData: (
+    nodeId: string,
+    updatedData: Record<string, unknown>,
+  ) => void;
+  setNodes: (nodes: ReactFlowNode[]) => void;
+  setEdges: (edges: ReactFlowEdge[]) => void;
+}
+
+interface PipelineEditorProps {
+  pipelineData?: Pipeline;
+  variant?: string;
+  onNodesChange?: (nodes: ReactFlowNode[]) => void;
+  onEdgesChange?: (edges: ReactFlowEdge[]) => void;
+  onViewportChange?: (viewport: Viewport) => void;
+  onNodeSelect?: (node: ReactFlowNode | null) => void;
+  initialNodes?: ReactFlowNode[];
+  initialEdges?: ReactFlowEdge[];
+  initialViewport?: Viewport;
+  shouldFitView?: boolean;
+  isSimpleGraph: boolean;
+  showDetailsPanel?: boolean;
+  detailsPanelType?: "node" | "run" | null;
+}
+
+const PipelineEditorContent = forwardRef<
+  PipelineEditorHandle,
+  PipelineEditorProps
+>(
+  (
+    {
+      pipelineData,
+      variant,
+      onNodesChange: onNodesChangeCallback,
+      onEdgesChange: onEdgesChangeCallback,
+      onViewportChange: onViewportChangeCallback,
+      onNodeSelect,
+      initialNodes,
+      initialEdges,
+      initialViewport,
+      shouldFitView,
+      isSimpleGraph,
+      showDetailsPanel,
+      detailsPanelType,
+    },
+    ref,
+  ) => {
+    const [nodes, setNodes, onNodesChange] = useNodesState<ReactFlowNode>([]);
+    const [edges, setEdges, onEdgesChange] = useEdgesState<ReactFlowEdge>([]);
+    const { getViewport, setViewport, fitView } = useReactFlow();
+    const [hasInitialized, setHasInitialized] = useState(false);
+
+    const onNodeClick: NodeMouseHandler = (event, node) => {
+      event.stopPropagation();
+      onNodeSelect?.(node);
+    };
+
+    const onPaneClick = () => {
+      onNodeSelect?.(null);
+    };
+
+    const handleNodeDataUpdate = useCallback(
+      (nodeId: string, updatedData: Record<string, unknown>) => {
+        setNodes((currentNodes) =>
+          currentNodes.map((node) =>
+            node.id === nodeId ? { ...node, data: updatedData } : node,
+          ),
+        );
+      },
+      [setNodes],
+    );
+
+    const { theme } = useTheme();
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        updateNodeData: handleNodeDataUpdate,
+        setNodes,
+        setEdges,
+      }),
+      [handleNodeDataUpdate, setNodes, setEdges],
+    );
+
+    useEffect(() => {
+      if (hasInitialized) {
+        onNodesChangeCallback?.(nodes);
+      }
+    }, [nodes, hasInitialized, onNodesChangeCallback]);
+
+    useEffect(() => {
+      if (hasInitialized) {
+        onEdgesChangeCallback?.(edges);
+      }
+    }, [edges, hasInitialized, onEdgesChangeCallback]);
+
+    useEffect(() => {
+      setHasInitialized(false);
+    }, [isSimpleGraph]);
+
+    // Adjust viewport when panel opens/closes
+    useEffect(() => {
+      if (
+        hasInitialized &&
+        showDetailsPanel !== undefined &&
+        nodes.length > 0
+      ) {
+        const panelWidth = showDetailsPanel
+          ? detailsPanelType === "node"
+            ? 520
+            : 820
+          : 0;
+        const shiftDistance = panelWidth / 2;
+
+        // Use fitView with padding to automatically adjust zoom and position
+        setTimeout(() => {
+          fitView({
+            padding: 0.15,
+            minZoom: 0.3,
+            maxZoom: 1,
+          });
+
+          // Then shift the view horizontally based on panel state
+          const currentViewport = getViewport();
+          const newX = showDetailsPanel
+            ? currentViewport.x - shiftDistance
+            : currentViewport.x + shiftDistance;
+
+          setViewport({
+            x: newX,
+            y: currentViewport.y,
+            zoom: currentViewport.zoom,
+          });
+        }, 0);
+      }
+    }, [
+      showDetailsPanel,
+      detailsPanelType,
+      hasInitialized,
+      fitView,
+      getViewport,
+      setViewport,
+      nodes,
+    ]);
+
+    useEffect(() => {
+      if (!hasInitialized) {
+        if (initialNodes && initialEdges) {
+          setNodes(initialNodes);
+          setEdges(initialEdges);
+
+          setTimeout(() => {
+            if (shouldFitView) {
+              fitView();
+            } else if (initialViewport) {
+              setViewport(initialViewport);
+            }
+          }, 0);
+          setHasInitialized(true);
+        } else if (pipelineData && variant) {
+          const variantData = pipelineData.variants.find(
+            (v) => v.id === variant,
+          );
+
+          if (
+            variantData?.pipeline_graph ||
+            variantData?.pipeline_graph_simple
+          ) {
+            const graphToUse = isSimpleGraph
+              ? variantData.pipeline_graph_simple
+              : variantData.pipeline_graph;
+            const nodes = graphToUse?.nodes ?? [];
+            const edges = graphToUse?.edges ?? [];
+
+            const transformedNodes = nodes.map(
+              (node) =>
+                ({
+                  ...node,
+                  type: node.type,
+                }) as ReactFlowNode,
+            );
+
+            const nodesWithPositions = createGraphLayout(
+              transformedNodes,
+              edges,
+              LayoutDirection.TopToBottom,
+            );
+
+            setNodes(nodesWithPositions);
+            setEdges(edges);
+
+            setTimeout(() => {
+              if (initialViewport) {
+                setViewport(initialViewport);
+              } else {
+                // Calculate viewport based on actual node positions
+                const nodePositions = nodesWithPositions.map(
+                  (n) => n.position?.x || 0,
+                );
+                const minX = Math.min(...nodePositions);
+                const maxX = Math.max(...nodePositions);
+                const graphWidth = maxX - minX;
+
+                // Adaptive padding - smaller for wider graphs, larger for narrow ones
+                const adaptivePadding = Math.max(
+                  150,
+                  Math.min(500, 500 - graphWidth / 4),
+                );
+                const viewportX = -minX + adaptivePadding;
+                setViewport({ x: viewportX, y: 50, zoom: 1 });
+              }
+            }, 0);
+
+            setHasInitialized(true);
+          }
+        }
+      }
+    }, [
+      pipelineData,
+      initialNodes,
+      initialEdges,
+      initialViewport,
+      shouldFitView,
+      hasInitialized,
+      setNodes,
+      setEdges,
+      setViewport,
+      fitView,
+      isSimpleGraph,
+      variant,
+    ]);
+
+    return (
+      <PipelineEditorContext.Provider value={{ simpleGraph: isSimpleGraph }}>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodeClick={onNodeClick}
+          onPaneClick={onPaneClick}
+          onMoveEnd={() => {
+            const viewport = getViewport();
+            onViewportChangeCallback?.(viewport);
+          }}
+          nodesDraggable={true}
+          colorMode={theme === "dark" ? "dark" : "light"}
+          className="h-full w-full"
+          defaultViewport={{ x: 0, y: 50, zoom: 1 }}
+          defaultEdgeOptions={{
+            animated: true,
+            style: { strokeWidth: 2 },
+            type: "smoothstep",
+          }}
+        >
+          <Controls />
+          <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
+        </ReactFlow>
+      </PipelineEditorContext.Provider>
+    );
+  },
+);
+
+const PipelineEditor = forwardRef<PipelineEditorHandle, PipelineEditorProps>(
+  (props, ref) => (
+    <ReactFlowProvider>
+      <PipelineEditorContent {...props} ref={ref} />
+    </ReactFlowProvider>
+  ),
+);
+
+PipelineEditor.displayName = "PipelineEditor";
+PipelineEditorContent.displayName = "PipelineEditorContent";
+
+export default PipelineEditor;

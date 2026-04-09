@@ -23,11 +23,17 @@ ENV PYTHONUNBUFFERED=1 \
     # Location where virtual env is created
     VENV_PATH="/opt/projsetup/.venv"
 
+ARG USER_ID=1000
+ARG USER_GROUP_ID=1000
+
+RUN groupadd -g ${USER_GROUP_ID} appuser && useradd -m -s /bin/bash -u ${USER_ID} -g ${USER_GROUP_ID} appuser
+
 # Add poetry and venv to path
 ENV PATH="$PATH:$POETRY_HOME/bin:$VENV_PATH/bin"
+ENV HOME=/home/appuser
 
 # Install curl to be used for health checks in final stages
-RUN apt update -y && apt install -y curl
+RUN apt-get update -y && apt-get install --no-install-recommends -y curl && rm -rf /var/lib/apt/lists/*
 # Upgrade pip to the latest version
 RUN pip install --upgrade pip 
 
@@ -63,11 +69,11 @@ ENV INTEL_OPENVINO_DIR=/opt/intel/openvino
 ENV LD_LIBRARY_PATH=/opt/intel/openvino/runtime/lib/intel64:/opt/intel/openvino/runtime/3rdparty/tbb/lib:/opt/intel/openvino/runtime/3rdparty/hddl/lib:$LD_LIBRARY_PATH
 ENV PYTHONPATH=/opt/intel/openvino/python:$PYTHONPATH
 ENV OUTPUT_DIR=/data
-ENV UPLOAD_DIR=/data/uploads
+ENV UPLOAD_DIR=/data/upload
 ENV AUDIO_DIR=/data/audio
-ENV GGML_MODEL_DIR=/models/ggml
-ENV OPENVINO_MODEL_DIR=/models/openvino
-
+ENV GGML_MODEL_DIR=/data/models/ggml
+ENV OPENVINO_MODEL_DIR=/data/models/openvino
+ENV STORAGE_BACKEND=local
 
 FROM python-base AS builder-base
 
@@ -92,14 +98,18 @@ RUN poetry lock --no-update && poetry install --no-dev --no-interaction --no-ans
 FROM python-base AS dev
 
 ENV FASTAPI_ENV=development
-WORKDIR $SETUP_PATH
-
 # Copy the poetry installation and the virtual env to current image
 COPY --from=builder-base $POETRY_HOME $POETRY_HOME
 COPY --from=builder-base $SETUP_PATH $SETUP_PATH
 
-# Install remaining dev dependencies
-RUN poetry install --no-interaction --no-ansi
+WORKDIR $SETUP_PATH
+
+# Create directories and set ownership; Update ownership for SETUP_PATH as well
+RUN mkdir -p $OUTPUT_DIR /app && chown -R appuser:appuser $SETUP_PATH $OUTPUT_DIR /app
+
+USER appuser
+# Install remaining dev dependencies as appuser
+RUN poetry lock --no-update && poetry install --no-interaction --no-ansi
 
 # In dev mode, the application code will be mounted to /app from host to allow hot-reloads
 WORKDIR /app
@@ -110,13 +120,6 @@ CMD ["uvicorn", "audio_analyzer.main:app", "--host", "0.0.0.0", "--port", "8000"
 
 # Production stage - optimized for deployment
 FROM python-base AS prod
-
-ENV FASTAPI_ENV=production
-COPY --from=builder-base $SETUP_PATH $SETUP_PATH
-
-WORKDIR /app
-# Copy the application code for production
-COPY . /app/
 
 # Optionally download copyleft sources if requested
 ARG COPYLEFT_SOURCES=false
@@ -138,7 +141,7 @@ RUN if [ "$COPYLEFT_SOURCES" = "true" ]; then \
         # Get source code for installed Python packages with copyleft licenses \
         mkdir -p /copyleft_sources/python && \
         cd /copyleft_sources/python && \
-        apt-get update && apt-get install -y gcc build-essential libffi-dev python3-dev && \
+        apt-get update && apt-get install --no-install-recommends -y gcc build-essential libffi-dev python3-dev && \
         # Download python package sources with relevant licenses \
         pip3 freeze | cut -d= -f1 | while read pkg; do \
             meta=$(pip3 show $pkg 2>/dev/null); \
@@ -151,7 +154,17 @@ RUN if [ "$COPYLEFT_SOURCES" = "true" ]; then \
         apt-get remove --purge -y gcc build-essential libffi-dev python3-dev; \
     fi
 
-EXPOSE 8000
+ENV FASTAPI_ENV=production
+COPY --from=builder-base $SETUP_PATH $SETUP_PATH
+
+RUN mkdir -p $OUTPUT_DIR /app && chown -R appuser:appuser $OUTPUT_DIR /app
+
+WORKDIR /app
+# Copy the application code for production
+COPY . .
+
+USER appuser
+
 # Create a mini script on-the-fly to run Gunicorn with Uvicorn worker
 RUN echo '#!/bin/bash\n\
 exec gunicorn audio_analyzer.main:app \
@@ -165,5 +178,6 @@ exec gunicorn audio_analyzer.main:app \
 --access-logfile=- \
 --error-logfile=-\n' > /app/gunicorn_start.sh && chmod +x /app/gunicorn_start.sh
 
+EXPOSE 8000
 # Run Gunicorn with Uvicorn workers for production
 CMD ["/app/gunicorn_start.sh"]

@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Intel Corporation
+// SPDX-License-Identifier: Apache-2.0
 import type { FC, ReactNode } from 'react';
 import styled from 'styled-components';
 import { useTranslation } from 'react-i18next';
@@ -78,8 +80,8 @@ const Drawer: FC<DrawerProps> = ({ title, isOpen, close, children }) => {
             </ToggletipButton>
 
             <ToggletipContent>
-              <p>{t('OnlyMp4')}</p>
-              <p>{t('HelpText')}</p>
+              <p>{t('OnlyStreamableMp4')}</p>
+              <p>{t('StreamableHelpText')}</p>
               <CodePara>
                 <strong>{ffmpegStreamableCmd}</strong>
               </CodePara>

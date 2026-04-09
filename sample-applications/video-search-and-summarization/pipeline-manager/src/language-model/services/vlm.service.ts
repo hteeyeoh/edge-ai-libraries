@@ -1,6 +1,5 @@
 // Copyright (C) 2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
-
 import { Injectable, Logger } from '@nestjs/common';
 import { OpenAI } from 'openai';
 import { ConfigService } from '@nestjs/config';
@@ -13,6 +12,8 @@ import { TemplateService } from './template.service';
 import { ModelInfo } from 'src/state-manager/models/state.model';
 import { OpenaiHelperService } from './openai-helper.service';
 import { FeaturesService } from 'src/features/features.service';
+import { CONFIG_STATE } from 'src/features/features.model';
+import { InferenceCountService } from './inference-count.service';
 
 interface ImageCompletionParams extends CompletionQueryParams {
   user_query?: string;
@@ -37,6 +38,7 @@ export class VlmService {
     private $config: ConfigService,
     private $feature: FeaturesService,
     private $template: TemplateService,
+    private $inferenceCount: InferenceCountService,
   ) {
     if ($feature.hasFeature('summary')) {
       this.initialize().catch((error) => {
@@ -50,15 +52,24 @@ export class VlmService {
   private defaultParams(): CompletionQueryParams {
     const accessKey = ['openai', 'vlmCaptioning', 'defaults'].join('.');
     const params: CompletionQueryParams = {};
+    const isVllm = this.$config.get('openai.useVLLM') === CONFIG_STATE.ON;
 
-    if (this.$config.get(`${accessKey}.doSample`) !== null) {
-      params.do_sample = this.$config.get(`${accessKey}.doSample`)!;
+    // For do_sample and seed parameters:
+    // These are not supported by vLLM - skip them. Apply for OVMS and internal VLM Microservice.
+    if (!isVllm) {
+      if (this.$config.get(`${accessKey}.doSample`) !== null) {
+        params.do_sample = this.$config.get(`${accessKey}.doSample`)!;
+      }
+      if (this.$config.get(`${accessKey}.seed`) !== null) {
+        params.seed = +this.$config.get(`${accessKey}.seed`)!;
+      }
     }
-    if (this.$config.get(`${accessKey}.seed`) !== null) {
-      params.seed = +this.$config.get(`${accessKey}.seed`)!;
-    }
+
     if (this.$config.get(`${accessKey}.temperature`)) {
-      params.temperature = +this.$config.get(`${accessKey}.temperature`)!;
+      const configuredTemp = +this.$config.get(`${accessKey}.temperature`)!;
+      params.temperature = isVllm && configuredTemp < 0.01 ? 0.01 : configuredTemp;
+    } else if (isVllm) {
+      params.temperature = 0.01;
     }
     if (this.$config.get(`${accessKey}.topP`)) {
       params.top_p = +this.$config.get(`${accessKey}.topP`)!;
@@ -103,6 +114,10 @@ export class VlmService {
       // Fetch Models
       await this.getModelsFromOpenai();
       this.serviceReady = true;
+      this.$inferenceCount.setVlmConfig({
+        model: this.model,
+        ip: baseURL,
+      });
     } catch (error) {
       console.error('Failed to retrieve models:', error);
     }
@@ -122,9 +137,7 @@ export class VlmService {
     }
   }
 
-  private async encodeBase64ContentFromUrl(
-    fileNameOrUrl: string,
-  ): Promise<string> {
+  private encodeBase64ContentFromUrl(fileNameOrUrl: string): string {
     // TODO: will require fixing when required
 
     try {
@@ -174,26 +187,24 @@ export class VlmService {
     imageUri: string[],
   ): Promise<string | null> {
     try {
-      console.log(userQuery, imageUri);
+      this.$inferenceCount.incrementVlmProcessCount();
+      console.log('Running VLM image inference', {
+        queryLength: userQuery.length,
+        imageCount: imageUri.length,
+      });
+      const isVllm = this.$config.get('openai.useVLLM') === CONFIG_STATE.ON;
 
-      let content: any[];
-
-      if (imageUri.length === 1) {
-        // Single image case
-        content = [
-          {
+      // vLLM: always map each URI to image_url.
+      // OVMS / internal VLM Microservice: single image → image_url, multiple → video type.
+      const content: any[] = isVllm
+        ? imageUri.map((url) => ({
             type: 'image_url',
-            image_url: { url: imageUri[0] },
-          },
-        ];
-      } else {
-        content = [
-          {
-            type: 'video',
-            video: imageUri.map((url) => url),
-          },
-        ];
-      }
+            image_url: { url },
+          }))
+        : (imageUri.length === 1
+            ? [{ type: 'image_url', image_url: { url: imageUri[0] } }]
+            : [{ type: 'video', video: imageUri.map((url) => url) }]
+          );
 
       const messages: any[] = [
         {
@@ -203,12 +214,13 @@ export class VlmService {
         },
       ];
 
-      const completions = await this.client.chat.completions.create({
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const requestPayload = {
         messages,
         model: this.model,
         ...this.defaultParams(),
-      });
+      };
+
+      const completions = await this.client.chat.completions.create(requestPayload);
 
       let result: string | null = null;
 
@@ -216,8 +228,10 @@ export class VlmService {
         result = completions.choices[0].message.content;
       }
 
+      this.$inferenceCount.decrementVlmProcessCount();
       return result;
     } catch (error) {
+      this.$inferenceCount.decrementVlmProcessCount();
       console.log('ERROR Image Inference', error);
       throw error;
     }
@@ -231,7 +245,7 @@ export class VlmService {
       fileNameOrUrl,
     } = params;
 
-    const imageBase64 = await this.encodeBase64ContentFromUrl(fileNameOrUrl);
+    const imageBase64 = this.encodeBase64ContentFromUrl(fileNameOrUrl);
     const startTime = Date.now();
     const chatCompletionFromBase64 = await this.client.chat.completions.create({
       messages: [

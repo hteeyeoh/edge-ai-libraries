@@ -5,6 +5,7 @@ This guide provides step-by-step instructions for deploying the Document Summari
 ## Prerequisites
 
 Before you begin, ensure that you have the following prerequisites:
+
 - Kubernetes cluster set up and running.
 - The cluster must support **dynamic provisioning of Persistent Volumes (PV)**. Refer to the [Kubernetes Dynamic Provisioning Guide](https://kubernetes.io/docs/concepts/storage/dynamic-provisioning/) for more details.
 - Install `kubectl` on your system. Refer to [Installation Guide](https://kubernetes.io/docs/tasks/tools/install-kubectl/). Ensure access to the Kubernetes cluster.
@@ -21,6 +22,7 @@ Following steps should be followed to deploy Document Summarization application 
 #### Step 1: Pull the Specific Chart
 
 Use the following command to pull the Helm chart from [Docker Hub](https://hub.docker.com/r/intel/document-summarization):
+
 ```bash
 helm pull oci://registry-1.docker.io/intel/document-summarization --version <version-no>
 ```
@@ -32,11 +34,13 @@ Refer to the release notes for details on the latest version number to use for t
 #### Step 2: Extract the `.tgz` File
 
 After pulling the chart, extract the `.tgz` file:
+
 ```bash
 tar -xvf document-summarization-<version-no>.tgz
 ```
 
-This will create a directory named `document-summarization` containing the chart files. Navigate to the extracted directory. 
+This will create a directory named `document-summarization` containing the chart files. Navigate to the extracted directory.
+
 ```bash
 cd document-summarization
 ```
@@ -55,27 +59,30 @@ Edit the `values.yaml` file to set the necessary environment variables. Ensure y
 | `global.otlp` | OTLP Endpoint | `<your-otlp-endpoint>` |
 | `global.llm.llmModelId` | Model to be used with ovms | Intel/neural-chat-7b-v3-3 or microsoft/Phi-3.5-mini-instruct |
 
-
 ### Option 2: Install from Source
 
 #### Step 1: Clone the Repository
 
 Clone the repository containing the Helm chart:
+
 ```bash
-git clone <repository-url>
+# Clone the latest on mainline
+git clone https://github.com/open-edge-platform/edge-ai-libraries.git edge-ai-libraries
+# Alternatively, Clone a specific release branch
+git clone https://github.com/open-edge-platform/edge-ai-libraries.git edge-ai-libraries -b <release-tag>
 ```
 
 #### Step 2: Change to the Chart Directory
 
 Navigate to the chart directory:
+
 ```bash
-cd <repository-url>/sample-applications/document-summarization/chart
+cd edge-ai-libraries/sample-applications/document-summarization/chart
 ```
 
 #### Step 3: Configure the `values.yaml` File
 
 Edit the `values.yaml` file located in the chart directory to set the necessary environment variables. Refer to the table in **Option 1, Step 3** for the list of keys and example values.
-
 
 #### Step 4: Build Helm Dependencies
 
@@ -84,6 +91,7 @@ Navigate to the chart directory and build the Helm dependencies using the follow
 ```bash
 helm dependency build
 ```
+
 ## Common Steps after configuration
 
 ### Step 5: Deploy the Helm Chart
@@ -93,6 +101,7 @@ Deploy the Document Summarization Helm chart:
 ```bash
 helm install document-summarization . -n <your-namespace>
 ```
+
 **Note:** When deploying OVMS, the OVMS service is observed to take more time than other model serving due to model conversion time.
 
 ### Step 6: Verify the Deployment
@@ -111,11 +120,25 @@ To access a docsum-nginx service running in your Kubernetes cluster using NodePo
 - NodeIP – The internal IP of a worker node.
 - NodePort – The port exposed by the service.
 
-Run the following command after replacing \<ui-node-port\> with your actual values:
+Run the following command by replacing \<namespace\> with your actual values:
+
 ```bash
-  kubectl get nodes -o wide | awk '$2 == "Ready" {print $6 ":<ui-node-port>"; exit}'
+  # Step 1: List all the pods for the deployment and identify where docsum-nginx is running
+  kubectl get pods -n <namespace> -o wide
+  # Look for document-summarization-nginx pod to understand which node it is being deployed to.
+
+  # Step 2: Get the node IP of the node where the service deployed to.
+  kubectl get nodes -o wide
+  # Look for the INTERNAL-IP value of the node deployed with the service
+
+  # Step 3: Get the NodePort for the service deployed
+  kubectl get svc document-summarization-nginx -n <namespace>
+  # In the output, find the port listed as 80:<node-port>.
+  # For example, in 80:30009/TCP, the NodePort is 30009.
+
+  ## Step 4: Collect all the information above and paste it into your browser to access the service UI
+  http://<node-ip>:<node-port>
 ```
-Simply copy and paste the output into your browser.
 
 ### Step 8: Update Helm Dependencies
 
@@ -124,6 +147,7 @@ If any changes are made to the subcharts, update the Helm dependencies using the
 ```bash
 helm dependency update
 ```
+
 ### Step 9: Uninstall Helm chart
 
 To uninstall helm charts deployed, use the following command:
@@ -140,10 +164,13 @@ helm uninstall document-summarization -n <your-namespace>
 ## Troubleshooting
 
 - If you encounter any issues during the deployment process, check the Kubernetes logs for errors:
+
   ```bash
   kubectl logs <pod-name>
   ```
+
 - If the PVC created during a Helm chart deployment is not removed or auto-deleted due to a deployment failure or being stuck, it must be deleted manually using the following commands:
+
   ```bash
   # List the PVCs present in the given namespace
   kubectl get pvc -n <namespace>
@@ -151,6 +178,7 @@ helm uninstall document-summarization -n <your-namespace>
   # Delete the required PVC from the namespace
   kubectl delete pvc <pvc-name> -n <namespace>
   ```
+
 ## Related links
 
 - [How to Build from Source](./build-from-source.md)

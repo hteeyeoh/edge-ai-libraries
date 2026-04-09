@@ -1,29 +1,36 @@
 # Video Search and Summarization (VSS) Sample Application
 
-Video search and summarization is a foundational sample application that provides the following set of video analytics capabilities:
+Use the Video Search and Summarization (VSS) sample application to search through your videos, summarize them, and more.
 
--  Video Search: This functionality enables efficient and intelligent search over video content directly at the edge. It leverages LangChain, multimodal embedding models, and agentic reasoning to extract and index visual, audio, and textual features from video frames using advanced embedding models. You can also perform natural language or multi-modal queries. Agentic reasoning allows the system to break down complex user queries, orchestrate multi-step retrievals, and combine insights from multiple video segments for more comprehensive and context-aware answers. LangChain orchestrates the retrieval and ranking process, ensuring relevant video segments are quickly identified and returned, all while minimizing latency and preserving data privacy by processing content locally on edge devices.
--  Video Summarization: Creates concise and informative summaries of long videos. It identifies and extracts the most relevant segments, enabling efficient content review, improved searchability, and quick understanding of lengthy video material. It combines insights from different data types by combining Generative AI Vision Language Models (VLMs), Computer Vision, and Audio analysis. All processing can be performed at the edge, ensuring low latency and data privacy.
--  Combined Search and Summarization capability: This feature integrates video search and summarization, allowing you to search directly over the generated video summaries. By leveraging the summary as a knowledge base, the system enhances the relevance and accuracy of search results, reducing the risk of hallucinations and irrelevant matches. This approach enables efficient retrieval of key information from long-form videos, ensuring that search queries are answered with contextually grounded and concise content.
+This foundational sample application provides three modes:
+
+| Mode | Use To | Capability |
+|---|---|---|
+| 🔍 Video Search | Find specific content within large video datasets through natural language. | Extract and index visual, audio, and textual features from video frames using the LangChain framework, multimodal embedding models, and agentic reasoning. Query using natural language or multi-modal models. |
+| 📝 Video Summarization | Create concise summaries of long-form videos or live streams, automatically. | Improve searchability. Combine insights from different data types using Generative AI Vision Language Models (VLMs), computer vision, and audio analysis. |
+| 🔗 Combined Video Search and Summarization | Find specific content and create concise summaries of videos - ideal for a comprehensive video analysis. | Search quickly and directly over generated video summaries. Using the summary as a knowledge base makes the search results more relevant and accurate. |
+
+## Why Use VSS?
+
+- **Data privacy**: Local processing ensures your data stays private.
+- **Ease of use**: You can search using natural language.
+- **Improved accuracy**: Multi-modal analysis works on video, audio, and text at the same time, which improves the results.
+- **Scalability**: You can work on one or multiple videos automatically.
 
 The detailed documentation to help you get started, configure, and deploy the sample application along with the required microservices are as follows.
 
 ## Documentation
 
-- **Overview**
-  - [Overview](docs/user-guide/Overview.md): A high-level introduction.
-  - [Overview Architecture](docs/user-guide/overview-architecture.md): Detailed architecture.
-
-- **Getting Started**
-  - [Get Started](docs/user-guide/get-started.md): Step-by-step guide to get started with the sample application.
-  - [System Requirements](docs/user-guide/system-requirements.md): Hardware and software requirements for running the sample application.
+- **Get Started**
+  - [Get Started](./docs/user-guide/get-started.md): How to get started with the sample application.
+  - [System Requirements](./docs/user-guide/get-started/system-requirements.md): What hardware and software you need to run the sample application.
 
 - **Deployment**
-  - [How to Build from Source](docs/user-guide/build-from-source.md): Instructions for building from source code.
-  - [How to Deploy with Helm](docs/user-guide/deploy-with-helm.md): Guide for deploying using Helm\* chart.
+  - [How to Build from Source](./docs/user-guide/build-from-source.md): How to build from source code.
+  - [How to Deploy with Helm](./docs/user-guide/deploy-with-helm.md): How to deploy using the Helm chart.
 
 - **API Reference**
-  - [API Reference](docs/user-guide/api-reference.md): Comprehensive reference for the available REST API endpoints.
+  - [API Reference](./docs/user-guide/api-reference.md): Comprehensive reference for the available REST API endpoints.
 
 - **Release Notes**
-  - [Release Notes](docs/user-guide/release-notes.md): Information on the latest updates, improvements, and bug fixes.
+  - [Release Notes](./docs/user-guide/release-notes.md): Information on the latest updates, improvements, and bug fixes.

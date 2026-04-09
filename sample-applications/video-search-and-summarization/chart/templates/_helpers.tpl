@@ -49,14 +49,14 @@ Define the name for nginx Chart.
 Define the name for videosummaryui Chart.
 */}}
 {{- define "videosummaryui.fullname" -}}
-{{ .Release.Name | trunc 57 | trimSuffix "-" }}-{{ .Values.videosummaryui.name }}
+{{ .Release.Name | trunc 57 | trimSuffix "-" }}-{{ .Values.name }}
 {{- end }}
 
 {{/*
-Define the name for videoSummaryManager Chart.
+Define the name for pipelineManager Chart.
 */}}
-{{- define "videoSummaryManager.fullname" -}}
-{{ .Release.Name | trunc 57 | trimSuffix "-" }}-{{ .Values.videoSummaryManager.name }}
+{{- define "pipelinemanager.fullname" -}}
+{{ .Release.Name | trunc 57 | trimSuffix "-" }}-{{ .Values.pipelinemanager.name }}
 {{- end }}
 
 {{/*
@@ -88,6 +88,13 @@ Define the name for vlminference Chart.
 {{- end }}
 
 {{/*
+Define the name for vss-collector.
+*/}}
+{{- define "vsscollector.fullname" -}}
+{{ .Release.Name | trunc 57 | trimSuffix "-" }}-{{ .Values.vsscollector.name }}
+{{- end }}
+
+{{/*
 Create a default fully qualified app name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
 If release name contains chart name it will be used as a full name.
@@ -100,3 +107,18 @@ If release name contains chart name it will be used as a full name.
 {{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
 {{- end }}
 {{- end }}
+
+{{/*
+Validate GPU pairing for multimodal embedding service and VDMS DataPrep when both are enabled.
+*/}}
+{{- define "video-summarization.validateGpuPairing" -}}
+{{- $mmeEnabled := (default false .Values.multimodalembeddingms.enabled) -}}
+{{- $dataprepEnabled := (default false .Values.vdmsdataprep.enabled) -}}
+{{- if and $mmeEnabled $dataprepEnabled -}}
+	{{- $mmeGpu := default false .Values.global.gpu.multimodalembeddingmsEnabled -}}
+	{{- $dataprepGpu := default false .Values.global.gpu.vdmsdataprepEnabled -}}
+	{{- if ne $mmeGpu $dataprepGpu -}}
+		{{- fail "global.gpu.multimodalembeddingmsEnabled and global.gpu.vdmsdataprepEnabled must be equal when both subcharts are enabled" -}}
+	{{- end -}}
+{{- end -}}
+{{- end -}}

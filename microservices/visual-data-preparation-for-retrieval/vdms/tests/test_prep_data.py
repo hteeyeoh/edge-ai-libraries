@@ -9,9 +9,10 @@ from http import HTTPStatus
 from fastapi import UploadFile
 from requests.exceptions import HTTPError
 
-import src.core.util
 from src.common import Settings
-from src.core.util import read_config, store_video_metadata, store_videos_to_temp
+from src.core.utils.config_utils import get_config as read_config
+from src.core.utils.metadata_utils import store_enhanced_video_metadata
+from src.core.utils.file_utils import save_video_to_temp as store_videos_to_temp
 
 
 def mock_upload_and_write_temp_file(mocker):
@@ -91,35 +92,49 @@ def test_store_videos_to_temp(tmp_path, mocker):
     shutil.copyfileobj.assert_called_once_with(mock_videofile.file, mock_open())
 
 
-def test_store_video_metadata(mocker, tmp_path):
+def test_store_enhanced_video_metadata(mocker, tmp_path):
+    """Test store_enhanced_video_metadata function (current implementation)."""
 
     mock_config = {
         "metadata_local_temp_dir": str(tmp_path),
     }
     mock_metadata = {"video_name": {"fps": 20, "total_frames": 10}}
+    mock_summary = {"metadata_file_path": ""}
 
-    chunk_duration = 30
-    clip_duration = 10
+    frame_interval = 15
+    enable_object_detection = True
+    detection_confidence = 0.85
 
     mock_open = mocker.mock_open()
     mocker.patch("builtins.open", mock_open)
     mock_extract = mocker.MagicMock()
-    mock_extract.return_value = mock_metadata
-    mocker.patch("src.core.util.extract_video_metadata", return_value=mock_metadata)
+    mock_extract.return_value = (mock_metadata, mock_summary)
+    mocker.patch(
+        "src.core.utils.metadata_utils.extract_enhanced_video_metadata",
+        return_value=mock_metadata,
+    )
     mocker.patch("pathlib.Path.mkdir")
 
     metadata_file = tmp_path / Settings().METADATA_FILENAME
 
     # Assert that result is a path and path matches the metadata_file
-    result = store_video_metadata(mock_config, chunk_duration, clip_duration)
-    assert type(result) is pathlib.PosixPath
-    assert result == metadata_file
+    result_path, summary = store_enhanced_video_metadata(
+        bucket_name="test-bucket",
+        video_id="test-video",
+        video_filename="test.mp4",
+        temp_video_path=pathlib.Path("/tmp/test.mp4"),
+        metadata_temp_path=str(tmp_path),
+        frame_interval=frame_interval,
+        enable_object_detection=enable_object_detection,
+        detection_confidence=detection_confidence,
+        tags=[]
+    )
+    assert isinstance(result_path, pathlib.PosixPath)
+    assert result_path == metadata_file
+    assert summary.get("metadata_file_path") == str(metadata_file)
 
     pathlib.Path.mkdir.assert_called_once()
     mock_open.assert_called_with(metadata_file, "w")
-    src.core.util.extract_video_metadata.assert_called_once_with(
-        mock_config, chunk_duration, clip_duration
-    )
 
 
 def test_read_config(tmp_path, mocker):
