@@ -1,9 +1,19 @@
 // Copyright (C) 2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 
-import { Document } from '@carbon/icons-react';
 import { type FC, type ChangeEvent, useState, useRef } from 'react';
-import styled from 'styled-components';
+import {
+  Box,
+  Button,
+  Checkbox,
+  Drawer,
+  Group,
+  List,
+  Paper,
+  Stack,
+  Text,
+} from '@mantine/core';
+import { IconFileText } from '@tabler/icons-react';
 import { useTranslation } from 'react-i18next';
 import { unwrapResult } from '@reduxjs/toolkit';
 import { AxiosError } from 'axios';
@@ -12,106 +22,42 @@ import { useAppDispatch, useAppSelector } from '../../redux/store.ts';
 import {
   conversationSelector,
   fetchInitialFiles,
+  removeAllFiles,
+  removeFile,
   uploadFile,
 } from '../../redux/conversation/conversationSlice.ts';
 import { notify } from '../../components/Notification/notify.ts';
 import { NotificationSeverity } from '../../components/Notification/notify.ts';
 import { acceptedFormat, MAX_FILE_SIZE } from '../../utils/constant.ts';
-import { StyledModelWrapper } from '../Conversation/Conversation.tsx';
 
 interface DataSourceProps {
   buttonDisabled?: boolean;
-  close: () => void;
+  close?: () => void;
+  opened?: boolean;
+  onClose?: () => void;
 }
 
-const DataSourceWrapper = styled.div`
-  margin-bottom: 1rem;
-`;
-
-const StyledButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.5rem 2rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  line-height: 1.29;
-  border: none;
-  cursor: pointer;
-  transition:
-    background-color 0.15s ease-in-out,
-    color 0.15s ease-in-out;
-  background-color: var(--color-info);
-  color: var(--color-white);
-  margin-top: 1rem;
-  &:hover {
-    background-color: var(--color-button-hover);
-  }
-  &:active {
-    background-color: var(--color-button-active);
-  }
-  &:disabled {
-    background-color: var(--color-button-disabled);
-    color: var(--color-white);
-    cursor: not-allowed;
-  }
-  &:focus {
-    outline: 2px solid var(--color-info);
-    outline-offset: 2px;
-  }
-`;
-
-const FileContainer = styled.div`
-  margin-top: 2rem;
-  display: flex;
-  align-items: center;
-  max-width: 400px;
-  background-color: var(--color-sidebar);
-  line-height: 1.3;
-`;
-
-const FileIcon = styled.div`
-  font-size: 0.875rem;
-  color: var(--color-black);
-  padding: 0.5rem;
-`;
-
-const FileName = styled.div`
-  font-size: 0.875rem;
-  color: var(--color-black);
-  padding: 0.5rem;
-  word-break: break-word;
-`;
-
-const StyledList = styled.ul`
-  font-size: 0.8rem;
-  list-style-type: disc;
-  padding-left: 1.5rem;
-  margin: 1rem auto;
-  margin-bottom: 1rem;
-
-  & li {
-    padding-bottom: 0.6rem;
-
-    &:last-child {
-      padding-bottom: 0;
-    }
-  }
-`;
-
-const DataSource: FC<DataSourceProps> = ({ close }) => {
+const DataSource: FC<DataSourceProps> = ({ close, opened, onClose }) => {
   const { t } = useTranslation();
   const [file, setFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [isValidFile, setIsValidFile] = useState<boolean>(true);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const drawerOpened = opened ?? true;
+  const closeHandler = onClose ?? close ?? (() => undefined);
 
   const dispatch = useAppDispatch();
-  const { files } = useAppSelector(conversationSelector);
+  const { files, isUploading, isWaitingForFirstToken } =
+    useAppSelector(conversationSelector);
+  const isAnyConversationWaiting = Object.values(
+    isWaitingForFirstToken || {},
+  ).some(Boolean);
+  const disableUpload = isUploading || isAnyConversationWaiting;
 
   const handleFileUpload = async (): Promise<void> => {
     if (file) {
       try {
-        close();
+        closeHandler();
         notify(t('fileUploadStarted'), NotificationSeverity.INFO);
         const response = await dispatch(uploadFile({ file }));
         unwrapResult(response);
@@ -126,6 +72,70 @@ const DataSource: FC<DataSourceProps> = ({ close }) => {
           fileInputRef.current.value = '';
         }
       }
+    }
+  };
+
+  const handleSelectFile = (fileName: string): void => {
+    setSelectedFiles((prev) =>
+      prev.includes(fileName)
+        ? prev.filter((name) => name !== fileName)
+        : [...prev, fileName],
+    );
+  };
+
+  const handleDeleteSelected = async (): Promise<void> => {
+    if (selectedFiles.length === 0) {
+      return;
+    }
+
+    const confirmDelete = window.confirm(
+      `Delete ${selectedFiles.length} selected file(s)? This action cannot be undone.`,
+    );
+    if (!confirmDelete) {
+      return;
+    }
+
+    try {
+      for (const fileName of selectedFiles) {
+        const response = await dispatch(removeFile({ fileName }));
+        unwrapResult(response);
+      }
+      notify(t('filesSuccessfullyDeleted'), NotificationSeverity.SUCCESS);
+      setSelectedFiles([]);
+      dispatch(fetchInitialFiles());
+    } catch (error) {
+      const axiosError = error as AxiosError;
+      notify(
+        axiosError.message || t('failedToDeleteFiles'),
+        NotificationSeverity.ERROR,
+      );
+    }
+  };
+
+  const handleDeleteAll = async (): Promise<void> => {
+    if (files.length === 0) {
+      return;
+    }
+
+    const confirmDelete = window.confirm(
+      'Delete all files? This action cannot be undone.',
+    );
+    if (!confirmDelete) {
+      return;
+    }
+
+    try {
+      const response = await dispatch(removeAllFiles());
+      unwrapResult(response);
+      notify(t('filesSuccessfullyDeleted'), NotificationSeverity.SUCCESS);
+      setSelectedFiles([]);
+      dispatch(fetchInitialFiles());
+    } catch (error) {
+      const axiosError = error as AxiosError;
+      notify(
+        axiosError.message || t('failedToDeleteFiles'),
+        NotificationSeverity.ERROR,
+      );
     }
   };
 
@@ -165,26 +175,83 @@ const DataSource: FC<DataSourceProps> = ({ close }) => {
   };
 
   return (
-    <DataSourceWrapper data-testid='data-source-wrapper'>
-      <StyledList>
-        <li>{t('acceptedFileText')}</li>
-        <li>{t('acceptedSizeText')}</li>
-      </StyledList>
-      <StyledButton
-        onClick={() => fileInputRef.current?.click()}
-        data-testid='add-file-button'
-      >
-        {t('addFile')}
-      </StyledButton>
+    <Drawer
+      opened={drawerOpened}
+      onClose={closeHandler}
+      title='Data Source'
+      position='right'
+      data-testid='data-source-wrapper'
+    >
+      <List size='sm' spacing='xs' mb='md'>
+        <List.Item>{t('acceptedFileText')}</List.Item>
+        <List.Item>{t('acceptedSizeText')}</List.Item>
+      </List>
 
-      {file && (
-        <FileContainer data-testid='file-container'>
-          <FileIcon>
-            <Document size='1.5rem' />
-          </FileIcon>
-          <FileName>{file.name}</FileName>
-        </FileContainer>
-      )}
+      <Button onClick={() => fileInputRef.current?.click()} data-testid='add-file-button'>
+        {t('addFile')}
+      </Button>
+
+      <Box mt='md'>
+        <Text fw={600} size='sm' mb='xs'>
+          {t('files')}
+        </Text>
+        {files.length > 0 ? (
+          <>
+            <Group mb='xs'>
+              <Button
+                size='xs'
+                variant='outline'
+                color='red'
+                disabled={selectedFiles.length === 0}
+                onClick={handleDeleteSelected}
+              >
+                {t('deleteSelected')}
+              </Button>
+              <Button
+                size='xs'
+                variant='outline'
+                color='red'
+                disabled={files.length === 0}
+                onClick={handleDeleteAll}
+              >
+                {t('deleteAll')}
+              </Button>
+            </Group>
+            <Stack gap='xs' data-testid='existing-files-list'>
+              {files.map((existingFile) => (
+                <Paper key={existingFile} withBorder p='xs'>
+                  <Group gap='xs' wrap='nowrap'>
+                    <Checkbox
+                      checked={selectedFiles.includes(existingFile)}
+                      onChange={() => handleSelectFile(existingFile)}
+                      aria-label={`Select ${existingFile}`}
+                    />
+                    <Text size='sm' style={{ wordBreak: 'break-word' }}>
+                      {existingFile}
+                    </Text>
+                  </Group>
+                </Paper>
+              ))}
+            </Stack>
+          </>
+        ) : (
+          <Text size='sm' c='dimmed'>
+            {t('noFilesFound')}
+          </Text>
+        )}
+      </Box>
+
+      {file ? (
+        <Paper withBorder p='sm' mt='lg' data-testid='file-container'>
+          <Group gap='xs'>
+            <IconFileText size={18} />
+            <Text size='sm' style={{ wordBreak: 'break-word' }}>
+              {file.name}
+            </Text>
+          </Group>
+        </Paper>
+      ) : null}
+
       <input
         ref={fileInputRef}
         type='file'
@@ -194,18 +261,24 @@ const DataSource: FC<DataSourceProps> = ({ close }) => {
         data-testid='file-input-field'
       />
 
-      <StyledModelWrapper>
-        {file && (
-          <StyledButton
-            disabled={!file || !isValidFile}
+      <Box mt='md'>
+        {file ? (
+          <Button
+            disabled={!file || !isValidFile || disableUpload}
             onClick={handleFileUpload}
             data-testid='file-upload-button'
           >
             {t('upload')}
-          </StyledButton>
-        )}
-      </StyledModelWrapper>
-    </DataSourceWrapper>
+          </Button>
+        ) : null}
+      </Box>
+
+      {disableUpload ? (
+        <List size='sm' mt='md'>
+          <List.Item>{t('showNotificationWhileStreaming')}</List.Item>
+        </List>
+      ) : null}
+    </Drawer>
   );
 };
 

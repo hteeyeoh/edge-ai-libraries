@@ -11,10 +11,11 @@ export interface Message {
   role: MessageRole;
   content: string;
   time: number;
-  conversationId: string;
+  conversationId?: string;
 }
 
 export interface ConversationRequest {
+  conversationId: string;
   userPrompt: Message;
 }
 
@@ -22,13 +23,15 @@ export interface Conversation {
   conversationId: string;
   title?: string;
   messages: Message[];
-  responseStatus: boolean;
+  responseStatus?: boolean;
 }
 
 export interface ConversationReducer {
   selectedConversationId: string;
   conversations: Conversation[];
-  onGoingResult: string;
+  onGoingResults: { [conversationId: string]: string };
   files: string[];
-  isGenerating: boolean;
+  isGenerating: { [conversationId: string]: boolean };
+  isWaitingForFirstToken: { [conversationId: string]: boolean };
+  isUploading: boolean;
 }

@@ -14,21 +14,6 @@ import {
   removeAllFiles,
   removeFile,
 } from '../../redux/conversation/conversationSlice.ts';
-import {
-  Container,
-  StyledButtonSet,
-  Button,
-  Table,
-  TableHead,
-  TableRow,
-  TableHeader,
-  TableBody,
-  TableCell,
-  Checkbox,
-  StyledList,
-  Strong,
-  ScrollableContainer,
-} from './FileLinkManagerStyles.ts';
 
 interface FileLinkManagerProps {
   showField: boolean;
@@ -114,50 +99,77 @@ const FileLinkManager: FC<FileLinkManagerProps> = ({
 
   return (
     <>
-      <Container data-testid='file-link-manager-wrapper'>
-        <Strong data-testid='files-heading-wrapper'>{t('files')}</Strong>
-        <StyledButtonSet>
-          <Button
+      <div data-testid='file-link-manager-wrapper' style={{ overflowY: 'auto' }}>
+        <p data-testid='files-heading-wrapper' style={{ fontWeight: 500, marginBottom: '0.5rem' }}>
+          {t('files')}
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <button
             onClick={handleDeleteSelected}
             disabled={selectedFiles.length === 0}
             data-testid='handle-delete-selected-button'
+            style={{
+              backgroundColor: 'var(--color-button)',
+              color: 'white',
+              border: 'none',
+              padding: '5px 10px',
+              cursor: selectedFiles.length === 0 ? 'not-allowed' : 'pointer',
+            }}
           >
             {t('deleteSelected')}
-          </Button>
-          <Button
+          </button>
+          <button
             onClick={handleDeleteAll}
             disabled={files.length === 0}
             data-testid='handle-delete-all-button'
+            style={{
+              backgroundColor: 'var(--color-button)',
+              color: 'white',
+              border: 'none',
+              padding: '5px 10px',
+              cursor: files.length === 0 ? 'not-allowed' : 'pointer',
+            }}
           >
             {t('deleteAll')}
-          </Button>
-        </StyledButtonSet>
+          </button>
+        </div>
 
-        <ScrollableContainer $showField={showField}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableHeader></TableHeader>
-                <TableHeader>{t('fileName')}</TableHeader>
-              </TableRow>
-            </TableHead>
+        <div
+          style={{
+            overflowY: 'auto',
+            maxHeight: showField ? 'max(15vh, 150px)' : 'max(55vh, 475px)',
+          }}
+        >
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead style={{ backgroundColor: 'var(--color-table-head)' }}>
+              <tr>
+                <th style={{ padding: '10px', border: '1px solid var(--color-gray-4)', textAlign: 'left' }}></th>
+                <th style={{ padding: '10px', border: '1px solid var(--color-gray-4)', textAlign: 'left' }}>
+                  {t('fileName')}
+                </th>
+              </tr>
+            </thead>
 
-            <TableBody>
+            <tbody>
               {files.map((file, index) => (
-                <TableRow key={index}>
-                  <TableCell>
-                    <Checkbox
+                <tr key={index}>
+                  <td style={{ padding: '10px', border: '1px solid var(--color-gray-4)' }}>
+                    <input
+                      type='checkbox'
                       checked={selectedFiles.some((f) => f === file)}
                       onChange={() => handleSelectItem(file)}
+                      style={{ margin: 0 }}
                     />
-                  </TableCell>
-                  <TableCell>{file}</TableCell>
-                </TableRow>
+                  </td>
+                  <td style={{ padding: '10px', border: '1px solid var(--color-gray-4)', wordBreak: 'break-word', lineHeight: 1.4 }}>
+                    {file}
+                  </td>
+                </tr>
               ))}
-            </TableBody>
-          </Table>
-        </ScrollableContainer>
-      </Container>
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <PopupModal
         open={isModalOpen}
@@ -169,11 +181,18 @@ const FileLinkManager: FC<FileLinkManagerProps> = ({
         secondaryButtonText={t('cancel')}
       >
         <p>{t('deleteFileDescription')}</p>
-        <StyledList>
+        <ul
+          style={{
+            listStyleType: 'disc',
+            paddingLeft: '3rem',
+            margin: '0.5rem 0',
+            wordBreak: 'break-word',
+          }}
+        >
           {deleteAll
             ? files.map((file, index) => <li key={index}>{file}</li>)
             : selectedFiles.map((file, index) => <li key={index}>{file}</li>)}
-        </StyledList>
+        </ul>
       </PopupModal>
     </>
   );

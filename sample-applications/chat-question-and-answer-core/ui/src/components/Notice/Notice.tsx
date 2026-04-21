@@ -2,27 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { FC } from 'react';
-import styled from 'styled-components';
 import { useTranslation } from 'react-i18next';
 
 import { useDisclosure } from '../../hooks/useDisclosure.ts';
 import { StyledIconButton } from '../Conversation/ConversationSideBar.tsx';
 import { NoticeKind, NoticeProps } from './NoticeProps.ts';
-
-const NoticeContainer = styled.div<{ kind: string }>`
-  padding: 0 1rem;
-  color: var(--color-black);
-  grid-column: 1 / -1;
-
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  text-align: center;
-  background-color: ${({ kind }) => `var(--color-${kind})`};
-  transition:
-    transform 0.5s ease-in-out,
-    opacity 0.5s ease-in-out;
-`;
 
 const Notice: FC<NoticeProps> = ({
   message,
@@ -41,7 +25,20 @@ const Notice: FC<NoticeProps> = ({
   return (
     <>
       {message && isOpen && isNoticeVisible && (
-        <NoticeContainer kind={kind} data-testid='notice-container'>
+        <div
+          data-testid='notice-container'
+          style={{
+            padding: '0 1rem',
+            color: 'var(--color-black)',
+            gridColumn: '1 / -1',
+            display: 'grid',
+            gridTemplateColumns: '1fr auto',
+            alignItems: 'center',
+            textAlign: 'center',
+            backgroundColor: `var(--color-${kind})`,
+            transition: 'transform 0.5s ease-in-out, opacity 0.5s ease-in-out',
+          }}
+        >
           {message}
           <StyledIconButton
             label={t('close')}
@@ -52,7 +49,7 @@ const Notice: FC<NoticeProps> = ({
           >
             &times;
           </StyledIconButton>
-        </NoticeContainer>
+        </div>
       )}
     </>
   );

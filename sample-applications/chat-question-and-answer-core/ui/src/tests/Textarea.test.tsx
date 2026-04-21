@@ -56,8 +56,10 @@ describe('Textarea Component test suite', () => {
         conversation: {
           conversations: [],
           selectedConversationId: '',
-          isGenerating: false,
-          onGoingResult: '',
+          isGenerating: {},
+          onGoingResults: {},
+          isWaitingForFirstToken: {},
+          isUploading: false,
           files: [],
           ...initialState,
         },
@@ -143,7 +145,10 @@ describe('Textarea Component test suite', () => {
   });
 
   it('should notify when Enter key is pressed while generating', () => {
-    renderComponent({ isGenerating: true });
+    renderComponent({
+      selectedConversationId: 'test-conv',
+      isGenerating: { 'test-conv': true },
+    });
 
     const textarea = screen.getByTestId('prompt-textarea');
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });

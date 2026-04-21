@@ -46,8 +46,10 @@ describe('ConversationSideBar Component test suite', () => {
         conversation: {
           conversations: [],
           selectedConversationId: '',
-          isGenerating: false,
-          onGoingResult: '',
+          isGenerating: {},
+          onGoingResults: {},
+          isWaitingForFirstToken: {},
+          isUploading: false,
           files: [],
           ...initialState,
         },
@@ -99,20 +101,20 @@ describe('ConversationSideBar Component test suite', () => {
     expect(screen.queryByText(i18n.t('chatHistory'))).not.toBeInTheDocument();
   });
 
-  it('should disable sidebar when isGenerating is true', () => {
+  it('should keep sidebar interactive even when one conversation is generating', () => {
     const initialState = {
-      isGenerating: true,
+      isGenerating: { '1': true },
     };
     renderComponent(initialState);
 
     const sidebar = screen.getByTestId('conversation-sidebar-wrapper');
-    expect(sidebar).toHaveStyle('pointer-events: none');
-    expect(sidebar).toHaveStyle('opacity: 0.5');
+    expect(sidebar).toHaveStyle('pointer-events: auto');
+    expect(sidebar).toHaveStyle('opacity: 1');
   });
 
-  it('should enable sidebar when isGenerating is false', () => {
+  it('should keep sidebar interactive when no conversations are generating', () => {
     const initialState = {
-      isGenerating: false,
+      isGenerating: {},
     };
     renderComponent(initialState);
 

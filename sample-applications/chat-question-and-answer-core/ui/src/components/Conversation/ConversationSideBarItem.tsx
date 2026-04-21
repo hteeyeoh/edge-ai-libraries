@@ -1,27 +1,27 @@
 // Copyright (C) 2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 
-import { IconButton, Stack } from '@carbon/react';
 import {
   useState,
   useRef,
   useEffect,
   type SyntheticEvent,
+  type ChangeEvent,
+  type KeyboardEvent,
   type FC,
   type ReactNode,
 } from 'react';
-import styled from 'styled-components';
-import { Edit, TrashCan } from '@carbon/icons-react';
+import { IconEdit, IconTrash } from '@tabler/icons-react';
 import { useTranslation } from 'react-i18next';
 
 import { NotificationSeverity, notify } from '../Notification/notify.ts';
 import PopupModal from '../PopupModal/PopupModal.tsx';
 import {
-  conversationSelector,
   deleteConversation,
   updateConversationTitle,
 } from '../../redux/conversation/conversationSlice.ts';
-import { useAppDispatch, useAppSelector } from '../../redux/store.ts';
+import { useAppDispatch } from '../../redux/store.ts';
+import Spinner from '../Spinner/Spinner.tsx';
 
 interface ConversationSideBarItemProps {
   title?: string;
@@ -29,69 +29,21 @@ interface ConversationSideBarItemProps {
   children?: ReactNode;
   isActive?: boolean;
   onClick?: (e: SyntheticEvent) => void;
+  showSpinner?: boolean;
 }
-
-const ConversationSideBarItemWrapper = styled(Stack)<{
-  $isActive: boolean;
-  $isHovered: boolean;
-}>`
-  padding: 10px 2px 10px 10px;
-  cursor: pointer;
-  transition:
-    background-color 0.3s,
-    color 0.3s;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 40px;
-  border-radius: ${({ $isActive, $isHovered }) =>
-    $isActive || $isHovered ? '5px' : '0'};
-  background-color: ${({ $isActive, $isHovered }) =>
-    $isActive || $isHovered ? 'var(--color-active)' : 'transparent'};
-`;
-
-const TextContainer = styled.div`
-  flex-grow: 1;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-`;
-
-const IconContainer = styled.div`
-  display: flex;
-  align-items: center;
-  height: 100%;
-`;
-
-const EditableInput = styled.input`
-  width: 100%;
-  padding: 5px;
-  font-size: 1rem;
-  border: 1px solid var(--color-gray-2);
-  border-radius: 4px;
-`;
-
-const StyledIconButton = styled(IconButton)`
-  border-width: 0;
-`;
-
-const StyledPara = styled.p`
-  margin: 1rem;
-`;
 
 const ConversationSideBarItem: FC<ConversationSideBarItemProps> = ({
   title,
   index,
   isActive = false,
   onClick,
+  showSpinner = false,
 }) => {
   const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState<boolean>(false);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [editedTitle, setEditedTitle] = useState<string>(title || '');
-  const { isGenerating } = useAppSelector(conversationSelector);
-
   const dispatch = useAppDispatch();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -119,7 +71,7 @@ const ConversationSideBarItem: FC<ConversationSideBarItemProps> = ({
     setIsEditing(true);
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     setEditedTitle(e.target.value);
   };
 
@@ -128,9 +80,7 @@ const ConversationSideBarItem: FC<ConversationSideBarItemProps> = ({
     setEditedTitle(title || t('newChat'));
   };
 
-  const handleInputKeyDown = async (
-    e: React.KeyboardEvent<HTMLInputElement>,
-  ) => {
+  const handleInputKeyDown = async (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       if (editedTitle.trim() === '') {
         notify(t('nonEmptyConversationTitle'), NotificationSeverity.WARNING);
@@ -159,55 +109,88 @@ const ConversationSideBarItem: FC<ConversationSideBarItemProps> = ({
 
   return (
     <>
-      <ConversationSideBarItemWrapper
+      <div
         key={index}
-        orientation='vertical'
-        $isActive={isActive}
-        $isHovered={isHovered}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         data-testid='conversation-sidebar-wrapper'
+        style={{
+          padding: '10px 2px 10px 10px',
+          cursor: 'pointer',
+          transition: 'background-color 0.3s, color 0.3s',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          height: '40px',
+          borderRadius: isActive || isHovered ? '5px' : '0',
+          backgroundColor:
+            isActive || isHovered ? 'var(--color-active)' : 'transparent',
+        }}
       >
-        <TextContainer onClick={onClick}>
+        <div
+          onClick={onClick}
+          style={{
+            flexGrow: 1,
+            overflow: 'hidden',
+            whiteSpace: 'nowrap',
+            textOverflow: 'ellipsis',
+          }}
+        >
           {isEditing ? (
-            <EditableInput
+            <input
               ref={inputRef}
               value={editedTitle}
               onChange={handleInputChange}
               onBlur={handleInputBlur}
               onKeyDown={handleInputKeyDown}
+              style={{
+                width: '100%',
+                padding: '5px',
+                fontSize: '1rem',
+                border: '1px solid var(--color-gray-2)',
+                borderRadius: '4px',
+              }}
             />
           ) : (
             title
           )}
-        </TextContainer>
-        {!isGenerating ? (
-          <IconContainer>
-            {(isHovered || isActive) && !isEditing && (
-              <>
-                <StyledIconButton
-                  kind='tertiary'
-                  size='sm'
-                  onClick={handleEditClick}
-                  data-testid='edit-conversation-button'
-                  label=''
-                >
-                  <Edit />
-                </StyledIconButton>
-                <StyledIconButton
-                  kind='tertiary'
-                  size='sm'
-                  onClick={handleDeleteClick}
-                  data-testid='delete-conversation-button'
-                  label=''
-                >
-                  <TrashCan />
-                </StyledIconButton>
-              </>
-            )}
-          </IconContainer>
-        ) : null}
-      </ConversationSideBarItemWrapper>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+          {showSpinner ? <Spinner /> : null}
+          {(isHovered || isActive) && !isEditing && (
+            <>
+              <button
+                onClick={handleEditClick}
+                data-testid='edit-conversation-button'
+                style={{
+                  borderWidth: 0,
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <IconEdit size={16} />
+              </button>
+              <button
+                onClick={handleDeleteClick}
+                data-testid='delete-conversation-button'
+                style={{
+                  borderWidth: 0,
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <IconTrash size={16} />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
 
       {showDeleteModal && (
         <PopupModal
@@ -219,10 +202,10 @@ const ConversationSideBarItem: FC<ConversationSideBarItemProps> = ({
           onSubmit={handleDeleteConfirm}
           onClose={handleDeleteCancel}
         >
-          <StyledPara>
+          <p style={{ margin: '1rem' }}>
             {t('thisWillDelete')}
             <strong>{`${title || t('newChat')}`}</strong>.
-          </StyledPara>
+          </p>
         </PopupModal>
       )}
     </>

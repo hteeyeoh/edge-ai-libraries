@@ -15,8 +15,10 @@ import client from '../../utils/client.ts';
 import { CHAT_QNA_URL, DATA_PREP_URL } from '../../config.ts';
 import {
   checkHealth,
+  decodeEscapedBytes,
   getCurrentTimeStamp,
   getTitle,
+  removeLastTagIfPresent,
   uuidv4,
 } from '../../utils/util.ts';
 import store, { RootState } from '../store.ts';
@@ -28,9 +30,11 @@ import {
 const initialState: ConversationReducer = {
   conversations: [],
   selectedConversationId: '',
-  onGoingResult: '',
+  onGoingResults: {},
   files: [],
-  isGenerating: false,
+  isGenerating: {},
+  isWaitingForFirstToken: {},
+  isUploading: false,
 };
 
 export const conversationSlice = createSlice({
@@ -40,44 +44,78 @@ export const conversationSlice = createSlice({
     logout: (state) => {
       state.conversations = [];
       state.selectedConversationId = '';
-      state.onGoingResult = '';
+      state.onGoingResults = {};
       state.files = [];
+      state.isGenerating = {};
+      state.isWaitingForFirstToken = {};
+      state.isUploading = false;
     },
 
-    setOnGoingResult: (state, action: PayloadAction<string>) => {
-      state.onGoingResult = action.payload;
+    setOnGoingResultForConversation: (
+      state,
+      action: PayloadAction<{ conversationId: string; result: string }>,
+    ) => {
+      state.onGoingResults[action.payload.conversationId] = action.payload.result;
     },
 
-    setIsGenerating: (state, action: PayloadAction<boolean>) => {
-      state.isGenerating = action.payload;
+    clearOnGoingResultForConversation: (state, action: PayloadAction<string>) => {
+      delete state.onGoingResults[action.payload];
+    },
+
+    setIsGenerating: (
+      state,
+      action: PayloadAction<{ conversationId: string; isGenerating: boolean }>,
+    ) => {
+      const { conversationId, isGenerating } = action.payload;
+      if (isGenerating) {
+        state.isGenerating[conversationId] = true;
+      } else {
+        delete state.isGenerating[conversationId];
+      }
+    },
+
+    setIsWaitingForFirstToken: (
+      state,
+      action: PayloadAction<{ conversationId: string; isWaiting: boolean }>,
+    ) => {
+      const { conversationId, isWaiting } = action.payload;
+      if (isWaiting) {
+        state.isWaitingForFirstToken[conversationId] = true;
+      } else {
+        delete state.isWaitingForFirstToken[conversationId];
+      }
     },
 
     addMessageToMessages: (state, action: PayloadAction<Message>) => {
-      const selectedConversation = state.conversations.find(
-        (conversation) =>
-          conversation.conversationId === state.selectedConversationId,
-      );
+      const targetConversationId =
+        action.payload.conversationId || state.selectedConversationId;
+      const selectedConversation = state.conversations.find((conversation) => {
+        return conversation.conversationId === targetConversationId;
+      });
       selectedConversation?.messages?.push(action.payload);
     },
 
     newConversation: (state) => {
       state.selectedConversationId = '';
-      state.onGoingResult = '';
     },
 
     deleteConversation: (state, action: PayloadAction<string>) => {
+      const conversationId = action.payload;
       const conversationIndex = state.conversations.findIndex(
-        (conversation) => conversation.conversationId === action.payload,
+        (conversation) => conversation.conversationId === conversationId,
       );
       if (conversationIndex !== -1) {
         state.conversations.splice(conversationIndex, 1);
-        if (state.selectedConversationId === action.payload) {
+        if (state.selectedConversationId === conversationId) {
           state.selectedConversationId = '';
         }
         if (state.conversations.length === 0) {
           state.selectedConversationId = '';
         }
       }
+      delete state.onGoingResults[conversationId];
+      delete state.isGenerating[conversationId];
+      delete state.isWaitingForFirstToken[conversationId];
     },
 
     updateConversationTitle: (
@@ -123,22 +161,27 @@ export const conversationSlice = createSlice({
     });
     builder.addCase(fetchInitialFiles.rejected, (state) => {
       state.files = [];
-      state.conversations = [];
-      state.selectedConversationId = '';
     });
-    builder.addCase(uploadFile.fulfilled, () => {});
-    builder.addCase(uploadFile.rejected, () => {});
+    builder.addCase(uploadFile.pending, (state) => {
+      state.isUploading = true;
+    });
+    builder.addCase(uploadFile.fulfilled, (state) => {
+      state.isUploading = false;
+    });
+    builder.addCase(uploadFile.rejected, (state) => {
+      state.isUploading = false;
+    });
     builder.addCase(removeFile.fulfilled, (state, action) => {
       const index = state.files.findIndex((file) => file === action.payload);
       if (index !== -1) {
         state.files.splice(index, 1);
       }
     });
-    builder.addCase(removeFile.rejected, () => {});
+    builder.addCase(removeFile.rejected, () => { });
     builder.addCase(removeAllFiles.fulfilled, (state, action) => {
       state.files = action.payload;
     });
-    builder.addCase(removeAllFiles.rejected, () => {});
+    builder.addCase(removeAllFiles.rejected, () => { });
   },
 });
 
@@ -148,7 +191,7 @@ const handleConnectionError = async (message?: string) => {
   if (healthStatus.status === 503) {
     notify(
       message ||
-        'The backend service is starting up. Please try again in a few moments.',
+      'The backend service is starting up. Please try again in a few moments.',
       NotificationSeverity.ERROR,
     );
   }
@@ -292,34 +335,56 @@ export const removeAllFiles = createAsyncThunk(
 
 export const doConversation = (conversationRequest: ConversationRequest) => {
   const { userPrompt } = conversationRequest;
-  const { conversationId } = userPrompt;
+  const inputConversationId = conversationRequest.conversationId;
+  let activeConversationId = inputConversationId;
 
-  const body = {
-    input: userPrompt.content,
-    stream: true,
-  };
-
-  store.dispatch(setIsGenerating(true));
-  store.dispatch(setResponseStatus(false));
-
-  if (!conversationId) {
-    // New Conversation
-    const id = uuidv4();
+  if (!activeConversationId) {
+    activeConversationId = uuidv4();
     store.dispatch(
       createNewConversation({
         title: getTitle(userPrompt.content),
-        id,
+        id: activeConversationId,
         message: userPrompt,
       }),
     );
-    store.dispatch(setSelectedConversationId(id));
+    store.dispatch(setSelectedConversationId(activeConversationId));
   } else {
-    store.dispatch(addMessageToMessages(userPrompt));
+    store.dispatch(
+      addMessageToMessages({
+        ...userPrompt,
+        conversationId: activeConversationId,
+      }),
+    );
   }
+
+  const currentState = store.getState();
+  const selectedConversation = currentState.conversations.conversations.find(
+    (conversation) => conversation.conversationId === activeConversationId,
+  );
+  const conversationMessages = (selectedConversation?.messages || []).map(
+    (message) => ({ role: message.role, content: message.content }),
+  );
+
+  const body = {
+    conversation_messages: conversationMessages,
+    stream: true,
+  };
+
+  store.dispatch(
+    setIsGenerating({ conversationId: activeConversationId, isGenerating: true }),
+  );
+  store.dispatch(
+    setIsWaitingForFirstToken({
+      conversationId: activeConversationId,
+      isWaiting: true,
+    }),
+  );
+  store.dispatch(setResponseStatus(false));
 
   handleConnectionError().catch(console.error);
 
   let result: string = '';
+  let firstTokenReceived = false;
   try {
     fetchEventSource(CHAT_QNA_URL, {
       method: 'POST',
@@ -347,9 +412,27 @@ export const doConversation = (conversationRequest: ConversationRequest) => {
         if (msg?.data !== '[DONE]') {
           try {
             if (msg.data) {
-              result += msg.data;
+              const chunk = msg.data.includes('\\x')
+                ? decodeEscapedBytes(msg.data)
+                : msg.data;
+              result += chunk;
+              result = removeLastTagIfPresent(result);
               if (result) {
-                store.dispatch(setOnGoingResult(result));
+                if (!firstTokenReceived) {
+                  firstTokenReceived = true;
+                  store.dispatch(
+                    setIsWaitingForFirstToken({
+                      conversationId: activeConversationId,
+                      isWaiting: false,
+                    }),
+                  );
+                }
+                store.dispatch(
+                  setOnGoingResultForConversation({
+                    conversationId: activeConversationId,
+                    result,
+                  }),
+                );
               }
             }
           } catch (e) {
@@ -359,21 +442,43 @@ export const doConversation = (conversationRequest: ConversationRequest) => {
       },
       onerror(err) {
         console.log('error', err);
-        store.dispatch(setIsGenerating(false));
-        store.dispatch(setOnGoingResult(''));
+        store.dispatch(
+          setIsGenerating({
+            conversationId: activeConversationId,
+            isGenerating: false,
+          }),
+        );
+        store.dispatch(clearOnGoingResultForConversation(activeConversationId));
+        store.dispatch(
+          setIsWaitingForFirstToken({
+            conversationId: activeConversationId,
+            isWaiting: false,
+          }),
+        );
 
         throw err;
       },
       onclose() {
-        store.dispatch(setOnGoingResult(''));
-        store.dispatch(setIsGenerating(false));
+        store.dispatch(clearOnGoingResultForConversation(activeConversationId));
+        store.dispatch(
+          setIsGenerating({
+            conversationId: activeConversationId,
+            isGenerating: false,
+          }),
+        );
+        store.dispatch(
+          setIsWaitingForFirstToken({
+            conversationId: activeConversationId,
+            isWaiting: false,
+          }),
+        );
         store.dispatch(setResponseStatus(true));
         store.dispatch(
           addMessageToMessages({
             role: MessageRole.Assistant,
             content: result,
             time: getCurrentTimeStamp(),
-            conversationId,
+            conversationId: activeConversationId,
           }),
         );
       },
@@ -385,8 +490,10 @@ export const doConversation = (conversationRequest: ConversationRequest) => {
 
 export const {
   logout,
-  setOnGoingResult,
+  setOnGoingResultForConversation,
+  clearOnGoingResultForConversation,
   setIsGenerating,
+  setIsWaitingForFirstToken,
   newConversation,
   deleteConversation,
   updateConversationTitle,
@@ -404,8 +511,10 @@ export const conversationSelector = createSelector(
     files: conversationState?.files || [],
     conversations: conversationState?.conversations || [],
     selectedConversationId: conversationState?.selectedConversationId || '',
-    onGoingResult: conversationState?.onGoingResult || '',
-    isGenerating: conversationState?.isGenerating || false,
+    onGoingResults: conversationState?.onGoingResults || {},
+    isGenerating: conversationState?.isGenerating || {},
+    isWaitingForFirstToken: conversationState?.isWaitingForFirstToken || {},
+    isUploading: conversationState?.isUploading || false,
   }),
 );
 

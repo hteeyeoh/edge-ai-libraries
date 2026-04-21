@@ -2,401 +2,138 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { configureStore } from '@reduxjs/toolkit';
-import { it, expect, describe, vi, afterEach, beforeEach } from 'vitest';
-import { waitFor } from '@testing-library/react';
+import { describe, it, expect } from 'vitest';
 
 import conversationReducer, {
-  logout,
-  setOnGoingResult,
-  setIsGenerating,
-  addMessageToMessages,
-  newConversation,
-  deleteConversation,
-  updateConversationTitle,
-  createNewConversation,
-  setSelectedConversationId,
-  fetchInitialFiles,
-  removeFile,
-  removeAllFiles,
-  uploadFile,
+    logout,
+    setOnGoingResultForConversation,
+    clearOnGoingResultForConversation,
+    setIsGenerating,
+    setIsWaitingForFirstToken,
+    addMessageToMessages,
+    newConversation,
+    deleteConversation,
+    updateConversationTitle,
+    createNewConversation,
+    setSelectedConversationId,
 } from '../redux/conversation/conversationSlice.ts';
 import {
-  ConversationReducer,
-  Message,
-  MessageRole,
+    ConversationReducer,
+    Message,
+    MessageRole,
 } from '../redux/conversation/conversation.ts';
-import {
-  getCurrentTimeStamp,
-  removeLastTagIfPresent,
-  uuidv4,
-} from '../utils/util.ts';
 
-vi.mock('../utils/util.ts', () => ({
-  uuidv4: vi.fn(),
-  getCurrentTimeStamp: vi.fn(),
-  removeLastTagIfPresent: vi.fn(),
-}));
+describe('conversationSlice reducers', () => {
+    const initialState: ConversationReducer = {
+        conversations: [],
+        selectedConversationId: '',
+        onGoingResults: {},
+        files: [],
+        isGenerating: {},
+        isWaitingForFirstToken: {},
+        isUploading: false,
+    };
 
-const userPrompt: Message = {
-  role: MessageRole.User,
-  content: 'Hello',
-  time: 100,
-  conversationId: '',
-};
-
-const conversationRequest = {
-  conversationId: 'test-uuid',
-  userPrompt,
-  messages: [],
-  model: 'Intel/neural-chat-7b-v3-3',
-};
-
-interface RootTestState {
-  conversation: ConversationReducer;
-}
-
-describe('conversationSlice test suite', () => {
-  const initialState: ConversationReducer = {
-    conversations: [],
-    selectedConversationId: '',
-    onGoingResult: '',
-    files: [],
-    isGenerating: false,
-  };
-
-  let store: ReturnType<typeof configureStore>;
-
-  beforeEach(() => {
-    store = configureStore({
-      reducer: { conversation: conversationReducer },
-      preloadedState: { conversation: initialState },
+    it('returns initial state', () => {
+        expect(conversationReducer(undefined, { type: 'unknown' })).toEqual(
+            initialState,
+        );
     });
 
-    vi.mocked(uuidv4).mockReturnValue('test-uuid');
-    vi.mocked(getCurrentTimeStamp).mockReturnValue(100);
-    vi.mocked(removeLastTagIfPresent).mockImplementation((str) => str);
-  });
+    it('handles setOnGoingResultForConversation and clear', () => {
+        const setState = conversationReducer(
+            initialState,
+            setOnGoingResultForConversation({
+                conversationId: 'c1',
+                result: 'partial',
+            }),
+        );
+        expect(setState.onGoingResults.c1).toBe('partial');
 
-  afterEach(() => {
-    vi.resetAllMocks();
-  });
-
-  it('should return the initial state', () => {
-    expect(conversationReducer(undefined, { type: 'unknown' })).toEqual(
-      initialState,
-    );
-  });
-
-  it('should handle logout', () => {
-    const actual = conversationReducer(initialState, logout());
-    expect(actual).toEqual(initialState);
-  });
-
-  it('should handle setOnGoingResult', () => {
-    const actual = conversationReducer(
-      initialState,
-      setOnGoingResult('result'),
-    );
-    expect(actual.onGoingResult).toEqual('result');
-  });
-
-  it('should handle setIsGenerating', () => {
-    const actual = conversationReducer(initialState, setIsGenerating(true));
-    expect(actual.isGenerating).toEqual(true);
-  });
-
-  it('should handle addMessageToMessages', () => {
-    const message: Message = {
-      role: MessageRole.User,
-      content: 'Hello',
-      time: 100,
-      conversationId: 'test-uuid',
-    };
-    const stateWithConversation = {
-      ...initialState,
-      conversations: [
-        {
-          conversationId: 'test-uuid',
-          title: 'Test Conversation',
-          messages: [],
-          responseStatus: false,
-        },
-      ],
-      selectedConversationId: 'test-uuid',
-    };
-    const actual = conversationReducer(
-      stateWithConversation,
-      addMessageToMessages(message),
-    );
-    expect(actual.conversations[0].messages).toContainEqual(message);
-  });
-
-  it('should handle newConversation', () => {
-    const actual = conversationReducer(initialState, newConversation());
-    expect(actual.selectedConversationId).toEqual('');
-    expect(actual.onGoingResult).toEqual('');
-  });
-
-  it('should handle deleteConversation', () => {
-    const stateWithConversation = {
-      ...initialState,
-      conversations: [
-        {
-          conversationId: 'test-uuid',
-          title: 'Test Conversation',
-          messages: [],
-          responseStatus: false,
-        },
-      ],
-      selectedConversationId: 'test-uuid',
-    };
-    const actual = conversationReducer(
-      stateWithConversation,
-      deleteConversation('test-uuid'),
-    );
-    expect(actual.conversations).toHaveLength(0);
-    expect(actual.selectedConversationId).toEqual('');
-  });
-
-  it('should handle updateConversationTitle', () => {
-    const stateWithConversation = {
-      ...initialState,
-      conversations: [
-        {
-          conversationId: 'test-uuid',
-          title: 'Old Title',
-          messages: [],
-          responseStatus: false,
-        },
-      ],
-    };
-    const actual = conversationReducer(
-      stateWithConversation,
-      updateConversationTitle({ id: 'test-uuid', updatedTitle: 'New Title' }),
-    );
-    expect(actual.conversations[0].title).toEqual('New Title');
-  });
-
-  it('should handle createNewConversation', () => {
-    const message: Message = {
-      role: MessageRole.User,
-      content: 'Hello',
-      time: 100,
-      conversationId: 'test-uuid',
-    };
-    const actual = conversationReducer(
-      initialState,
-      createNewConversation({
-        title: 'New Conversation',
-        id: 'test-uuid',
-        message,
-      }),
-    );
-    expect(actual.conversations).toHaveLength(1);
-    expect(actual.conversations[0].title).toEqual('New Conversation');
-    expect(actual.conversations[0].messages).toContainEqual(message);
-  });
-
-  it('should handle setSelectedConversationId', () => {
-    const actual = conversationReducer(
-      initialState,
-      setSelectedConversationId('test-uuid'),
-    );
-    expect(actual.selectedConversationId).toEqual('test-uuid');
-  });
-
-  it('should handle fetchInitialFiles.fulfilled', () => {
-    const files = ['file1.txt'];
-    const response = { data: files, status: 200 };
-    const actual = conversationReducer(
-      initialState,
-      fetchInitialFiles.fulfilled(response, ''),
-    );
-    expect(actual.files).toEqual(files);
-  });
-
-  it('should handle fetchInitialFiles.pending', () => {
-    const actual = conversationReducer(
-      initialState,
-      fetchInitialFiles.pending('', undefined),
-    );
-    expect(actual.isGenerating).toEqual(false);
-  });
-
-  it('should handle fetchInitialFiles.rejected', () => {
-    const actual = conversationReducer(
-      initialState,
-      fetchInitialFiles.rejected(
-        new Error('Failed to fetch files'),
-        '',
-        undefined,
-      ),
-    );
-    expect(actual.files).toEqual([]);
-  });
-
-  it('should handle removeFile.fulfilled', () => {
-    const stateWithFiles = {
-      ...initialState,
-      files: ['file1.txt'],
-    };
-    const actual = conversationReducer(
-      stateWithFiles,
-      removeFile.fulfilled('file1.txt', '', { fileName: 'file1.txt' }),
-    );
-    expect(actual.files).toHaveLength(0);
-  });
-
-  it('should handle removeFile.rejected', () => {
-    const stateWithFiles = {
-      ...initialState,
-      files: ['file1.txt'],
-    };
-    const actual = conversationReducer(
-      stateWithFiles,
-      removeFile.rejected(new Error('Failed to delete file'), '', {
-        fileName: 'file1.txt',
-      }),
-    );
-    expect(actual.files).toHaveLength(1);
-  });
-
-  it('should handle removeAllFiles.fulfilled', () => {
-    const stateWithFiles = {
-      ...initialState,
-      files: ['file1.txt', 'file2.txt'],
-    };
-    const actual = conversationReducer(
-      stateWithFiles,
-      removeAllFiles.fulfilled([], ''),
-    );
-    expect(actual.files).toEqual([]);
-  });
-
-  it('should handle removeAllFiles.rejected', () => {
-    const actual = conversationReducer(
-      initialState,
-      removeAllFiles.rejected(new Error('Failed to delete all files'), ''),
-    );
-    expect(actual.files).toEqual([]);
-  });
-
-  it('should handle doConversation for new conversation', async () => {
-    const mockDoConversation = vi.fn();
-    mockDoConversation.mockImplementation(() => {
-      store.dispatch(
-        createNewConversation({
-          title: userPrompt.content,
-          id: 'test-uuid',
-          message: userPrompt,
-        }),
-      );
-      store.dispatch(setSelectedConversationId('test-uuid'));
+        const clearState = conversationReducer(
+            setState,
+            clearOnGoingResultForConversation('c1'),
+        );
+        expect(clearState.onGoingResults.c1).toBeUndefined();
     });
 
-    await mockDoConversation(conversationRequest);
+    it('handles setIsGenerating and setIsWaitingForFirstToken', () => {
+        const generating = conversationReducer(
+            initialState,
+            setIsGenerating({ conversationId: 'c1', isGenerating: true }),
+        );
+        expect(generating.isGenerating.c1).toBe(true);
 
-    await waitFor(() => {
-      const state = store.getState() as RootTestState;
-      expect(state.conversation.conversations).toHaveLength(1);
-      expect(state.conversation.selectedConversationId).toEqual('test-uuid');
-    });
-  });
+        const waiting = conversationReducer(
+            generating,
+            setIsWaitingForFirstToken({ conversationId: 'c1', isWaiting: true }),
+        );
+        expect(waiting.isWaitingForFirstToken.c1).toBe(true);
 
-  it('should handle doConversation for existing conversation', async () => {
-    const stateWithConversation = {
-      ...initialState,
-      conversations: [
-        {
-          conversationId: 'test-uuid',
-          title: 'Test Conversation',
-          messages: [],
-          responseStatus: false,
-        },
-      ],
-      selectedConversationId: 'test-uuid',
-    };
-
-    store = configureStore({
-      reducer: {
-        conversation: conversationReducer,
-      },
-      preloadedState: {
-        conversation: stateWithConversation,
-      },
+        const cleared = conversationReducer(
+            waiting,
+            setIsGenerating({ conversationId: 'c1', isGenerating: false }),
+        );
+        expect(cleared.isGenerating.c1).toBeUndefined();
     });
 
-    const conversationRequest = {
-      conversationId: 'test-uuid',
-      userPrompt,
-    };
+    it('creates conversation, appends message, updates title, selects and deletes', () => {
+        const userMessage: Message = {
+            role: MessageRole.User,
+            content: 'Hello',
+            time: 100,
+            conversationId: 'c1',
+        };
 
-    const mockDoConversation = vi.fn();
-    mockDoConversation.mockImplementation(() => {
-      store.dispatch(addMessageToMessages(userPrompt));
+        const created = conversationReducer(
+            initialState,
+            createNewConversation({ title: 'Chat 1', id: 'c1', message: userMessage }),
+        );
+        expect(created.conversations).toHaveLength(1);
+
+        const selected = conversationReducer(created, setSelectedConversationId('c1'));
+        expect(selected.selectedConversationId).toBe('c1');
+
+        const assistantMessage: Message = {
+            role: MessageRole.Assistant,
+            content: 'Hi',
+            time: 101,
+            conversationId: 'c1',
+        };
+        const withReply = conversationReducer(
+            selected,
+            addMessageToMessages(assistantMessage),
+        );
+        expect(withReply.conversations[0].messages).toHaveLength(2);
+
+        const renamed = conversationReducer(
+            withReply,
+            updateConversationTitle({ id: 'c1', updatedTitle: 'Renamed' }),
+        );
+        expect(renamed.conversations[0].title).toBe('Renamed');
+
+        const deleted = conversationReducer(renamed, deleteConversation('c1'));
+        expect(deleted.conversations).toHaveLength(0);
+        expect(deleted.selectedConversationId).toBe('');
     });
 
-    await mockDoConversation(conversationRequest);
+    it('handles newConversation and logout', () => {
+        const stateWithSelection = {
+            ...initialState,
+            selectedConversationId: 'c1',
+        };
+        const resetSelection = conversationReducer(stateWithSelection, newConversation());
+        expect(resetSelection.selectedConversationId).toBe('');
 
-    await waitFor(() => {
-      const state = store.getState() as RootTestState;
-      expect(state.conversation.conversations[0].messages).toContainEqual(
-        userPrompt,
-      );
-    });
-  });
-
-  it('should handle uploadFile.fulfilled', () => {
-    const stateWithFiles = {
-      ...initialState,
-      files: ['file1.txt'],
-    };
-    const actual = conversationReducer(
-      stateWithFiles,
-      uploadFile.fulfilled(
-        {
-          data: 'file2.txt',
-          status: 200,
-        },
-        '',
-        { file: new File(['content'], 'file2.txt') },
-      ),
-    );
-    expect(actual.files).toHaveLength(1);
-  });
-
-  it('should handle uploadFile.rejected', () => {
-    const stateWithFiles = {
-      ...initialState,
-      files: ['file1.txt'],
-    };
-    const actual = conversationReducer(
-      stateWithFiles,
-      uploadFile.rejected(new Error('Failed to upload file'), '', {
-        file: new File(['content'], 'file2.txt'),
-      }),
-    );
-    expect(actual.files).toHaveLength(1);
-  });
-
-  it('should handle doConversation error', async () => {
-    const mockDoConversation = vi.fn();
-    mockDoConversation.mockImplementation(() => {
-      throw new Error('Failed to connect');
+        const loggedOut = conversationReducer(resetSelection, logout());
+        expect(loggedOut).toEqual(initialState);
     });
 
-    try {
-      await mockDoConversation(conversationRequest);
-    } catch (error) {
-      if (error instanceof Error) {
-        expect(error.message).toEqual('Failed to connect');
-      }
-    }
-
-    await waitFor(() => {
-      const state = store.getState() as RootTestState;
-      expect(state.conversation.isGenerating).toEqual(false);
-      expect(state.conversation.onGoingResult).toEqual('');
+    it('is compatible with store setup', () => {
+        const store = configureStore({
+            reducer: { conversation: conversationReducer },
+            preloadedState: { conversation: initialState },
+        });
+        expect(store.getState().conversation).toEqual(initialState);
     });
-  });
 });

@@ -3,20 +3,11 @@
 
 import { useEffect, type FC } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import styled from 'styled-components';
 
 import { NotificationProps } from './NotificationProps.ts';
 import { removeNotification } from '../../redux/notification/notificationSlice.ts';
 import { RootState } from '../../redux/store.ts';
 import NotificationItem from './NotificationItem.tsx';
-
-const NotificationContainer = styled.div`
-  position: fixed;
-  top: 5px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 9999;
-`;
 
 const NotificationList: FC = () => {
   const notifications = useSelector((state: RootState) => state.notifications);
@@ -35,7 +26,16 @@ const NotificationList: FC = () => {
   }, [notifications, dispatch]);
 
   return (
-    <NotificationContainer data-testid='notification-container'>
+    <div
+      data-testid='notification-container'
+      style={{
+        position: 'fixed',
+        top: '5px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 9999,
+      }}
+    >
       {notifications.map((notification) => (
         <NotificationItem
           key={notification.id}
@@ -44,7 +44,7 @@ const NotificationList: FC = () => {
           data-testid={`notification-item-${notification.id}`}
         />
       ))}
-    </NotificationContainer>
+    </div>
   );
 };
 

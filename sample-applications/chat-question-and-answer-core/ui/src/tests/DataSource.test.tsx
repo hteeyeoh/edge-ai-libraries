@@ -64,8 +64,10 @@ describe('DataSource Component test suite', () => {
         conversation: {
           conversations: [],
           selectedConversationId: '',
-          isGenerating: false,
-          onGoingResult: '',
+          isGenerating: {},
+          onGoingResults: {},
+          isWaitingForFirstToken: {},
+          isUploading: false,
           files: [],
           ...initialState,
         },

@@ -1,8 +1,14 @@
 # Defaul prompt template for RAG (Retrieval-Augmented Generation)
 default_rag_prompt_template = """
     Use the following pieces of context from retrieved
-    dataset to answer the question. Do not make up an answer if there is no
+    dataset and prior conversation history to answer the question. Do not make up an answer if there is no
     context provided to help answer it.
+
+    Conversation history:
+    ---------
+    {history}
+
+    ---------
 
     Context:
     ---------
@@ -20,8 +26,14 @@ model_prompt_templates = {
     "microsoft/Phi-3.5-mini-instruct": """
     <|system|>
     Use the following pieces of context from retrieved
-    dataset to answer the question. Do not make up an answer if there is no
+    dataset and prior conversation history to answer the question. Do not make up an answer if there is no
     context provided to help answer it.<|end|>
+
+    <|history|>
+    Conversation history:
+    ---------
+    {history}
+    <|end|>
 
     <|context|>
     Context:
@@ -41,8 +53,11 @@ model_prompt_templates = {
     "Intel/neural-chat-7b-v3-3": """
     ### System:
     Use the following pieces of context from retrieved
-    dataset to answer the question. Do not make up an answer if there is no
+    dataset and prior conversation history to answer the question. Do not make up an answer if there is no
     context provided to help answer it.
+
+    ### Conversation History:
+    {history}
 
     ### Context:
     {context}
@@ -56,8 +71,13 @@ model_prompt_templates = {
     """
     <|start_header_id|>system<|end_header_id|>
     Use the following pieces of context from retrieved
-    dataset to answer the question. Do not make up an answer if there is no
+    dataset and prior conversation history to answer the question. Do not make up an answer if there is no
     context provided to help answer it.
+
+    <history>
+    Conversation history:
+    {history}
+    </history>
 
     <context>
     Context:
@@ -74,8 +94,11 @@ model_prompt_templates = {
     <|im_start|>
     system:
     Use the following pieces of context from retrieved
-    dataset to answer the question. Do not make up an answer if there is no
+    dataset and prior conversation history to answer the question. Do not make up an answer if there is no
     context provided to help answer it.
+
+    conversation_history:
+    {history}
 
     context:
     {context}

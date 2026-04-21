@@ -3,7 +3,6 @@ from .document import load_file_document
 from .logger import logger
 from langchain_classic.retrievers.contextual_compression import ContextualCompressionRetriever
 from langchain_community.vectorstores import FAISS
-from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -38,7 +37,7 @@ else:
     logger.info("Bypassing to mock these functions because RUN_TEST is set to 'True' to run pytest unit test.")
 
 
-def default_context(docs):
+def default_context(_):
     """
     Returns a default context when the retriever is None.
 
@@ -97,16 +96,17 @@ def build_chain(retriever=None):
     """
 
     if retriever:
-        context = retriever | (
-            lambda docs: "\n\n".join(doc.page_content for doc in docs)
-        )
+        context = (
+            lambda chain_input: chain_input.get("question", "")
+        ) | retriever | (lambda docs: "\n\n".join(doc.page_content for doc in docs))
     else:
         context = default_context
 
     chain = (
         {
             "context": context,
-            "question": RunnablePassthrough(),
+            "question": lambda chain_input: chain_input.get("question", ""),
+            "history": lambda chain_input: chain_input.get("history", ""),
         }
         | prompt
         | llm
@@ -116,17 +116,20 @@ def build_chain(retriever=None):
     return chain
 
 
-async def process_query(chain=None, query: str = ""):
+async def process_query(chain=None, chain_input=None):
     """
     Processes a query using the provided chain and yields the results asynchronously.
     Args:
         chain: An optional chain object that has an `astream` method to process the query.
-        query (str): The query string to be processed.
+        chain_input (dict): A dictionary containing the question and optional history.
     Yields:
         str: The processed data chunks in the format "data: {chunk}\n\n".
     """
 
-    async for chunk in chain.astream(query):
+    if chain_input is None:
+        chain_input = {"question": "", "history": ""}
+
+    async for chunk in chain.astream(chain_input):
         yield f"data: {chunk}\n\n"
 
 

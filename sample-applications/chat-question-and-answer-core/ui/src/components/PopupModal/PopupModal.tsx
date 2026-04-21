@@ -3,23 +3,10 @@
 
 import { FC } from 'react';
 import { createPortal } from 'react-dom';
-import { Modal } from '@carbon/react';
-import styled from 'styled-components';
+import { Button, Group, Modal } from '@mantine/core';
 import { useTranslation } from 'react-i18next';
 
 import { PopupModalProps } from './PopupModalProps.ts';
-
-const StyledModal = styled(Modal)`
-  & .cds--modal-header__heading {
-    font-size: 1.2rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid var(--color-gray-4);
-  }
-
-  & .cds--modal-content {
-    padding-block: 0;
-  }
-`;
 
 const PopupModal: FC<PopupModalProps> = ({
   open = true,
@@ -30,6 +17,7 @@ const PopupModal: FC<PopupModalProps> = ({
   size = 'sm',
   children,
   onSubmit,
+  onOpen,
   onClose,
   preventCloseOnClickOutside = false,
   primaryButtonDisabled = false,
@@ -37,21 +25,35 @@ const PopupModal: FC<PopupModalProps> = ({
   const { t } = useTranslation();
 
   return createPortal(
-    <StyledModal
-      passiveModal={passiveModal}
-      open={open}
+    <Modal
+      opened={open}
+      onClose={onClose || (() => onOpen(false))}
+      title={headingMsg || t('headingMsg')}
       size={size}
-      modalHeading={headingMsg || t('headingMsg')}
-      primaryButtonText={primaryButtonText || t('confirm')}
-      secondaryButtonText={secondaryButtonText}
-      onRequestClose={onClose}
-      onRequestSubmit={onSubmit}
-      preventCloseOnClickOutside={preventCloseOnClickOutside}
-      primaryButtonDisabled={primaryButtonDisabled}
+      closeOnClickOutside={!preventCloseOnClickOutside}
       data-testid='popup-modal'
     >
       {children}
-    </StyledModal>,
+      {!passiveModal ? (
+        <Group justify='flex-end' mt='md'>
+          {secondaryButtonText ? (
+            <Button variant='default' onClick={onClose || (() => onOpen(false))}>
+              {secondaryButtonText}
+            </Button>
+          ) : null}
+          <Button
+            onClick={(event) => {
+              if (onSubmit) {
+                onSubmit(event);
+              }
+            }}
+            disabled={primaryButtonDisabled}
+          >
+            {primaryButtonText || t('confirm')}
+          </Button>
+        </Group>
+      ) : null}
+    </Modal>,
     document.body,
   );
 };

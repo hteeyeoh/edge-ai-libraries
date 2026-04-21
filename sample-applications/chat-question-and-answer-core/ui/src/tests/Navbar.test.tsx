@@ -43,8 +43,10 @@ describe('Navbar Component test suite', () => {
         conversation: {
           conversations: [],
           selectedConversationId: '',
-          isGenerating: false,
-          onGoingResult: '',
+          isGenerating: {},
+          onGoingResults: {},
+          isWaitingForFirstToken: {},
+          isUploading: false,
           files: [],
           ...initialState,
         },
@@ -83,7 +85,7 @@ describe('Navbar Component test suite', () => {
   it('should render askQuestion button when selectedConversationId is present', () => {
     const initialState = {
       selectedConversationId: '123',
-      isGenerating: false,
+      isGenerating: {},
     };
     renderComponent(initialState);
 
@@ -93,7 +95,7 @@ describe('Navbar Component test suite', () => {
   it('should call handleNewConversation when the askQuestion button is clicked', () => {
     const initialState = {
       selectedConversationId: '123',
-      isGenerating: false,
+      isGenerating: {},
     };
     renderComponent(initialState);
 
@@ -118,7 +120,7 @@ describe('Navbar Component test suite', () => {
 
   it('should disable buttons when isGenerating is true', () => {
     const initialState = {
-      isGenerating: true,
+      isGenerating: { '123': true },
       selectedConversationId: '123',
     };
     renderComponent(initialState);

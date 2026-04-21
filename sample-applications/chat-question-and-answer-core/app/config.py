@@ -123,7 +123,7 @@ class Settings(BaseSettings):
             self.PROMPT_TEMPLATE = get_prompt_template(self.LLM_MODEL_ID)
 
         # Validate PROMPT_TEMPLATE
-        required_placeholders = ["{context}", "{question}"]
+        required_placeholders = ["{context}", "{question}", "{history}"]
         for placeholder in required_placeholders:
             if placeholder not in self.PROMPT_TEMPLATE:
                 raise ValueError(f"PROMPT_TEMPLATE must include the placeholder {placeholder}.")

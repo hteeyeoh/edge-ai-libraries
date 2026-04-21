@@ -1,87 +1,57 @@
 // Copyright (C) 2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEffect, useRef, useState, type FC } from 'react';
-import styled from 'styled-components';
-import { useTranslation } from 'react-i18next';
+import { useEffect, useRef, useState, type FC, type KeyboardEvent } from 'react';
+import { ActionIcon, Anchor, Group, Paper, Stack, Text, Title } from '@mantine/core';
+import { IconFilePlus, IconMessagePlus } from '@tabler/icons-react';
 
 import { useAppDispatch, useAppSelector } from '../../redux/store.ts';
 import {
+  doConversation,
   conversationSelector,
   fetchInitialFiles,
+  newConversation,
 } from '../../redux/conversation/conversationSlice.ts';
-import { MessageRole } from '../../redux/conversation/conversation.ts';
+import { Message, MessageRole } from '../../redux/conversation/conversation.ts';
 import ConversationMessage from './ConversationMessage.tsx';
-import { Navigation } from './ConversationSideBar.tsx';
 import Textarea from '../Textarea/Textarea.tsx';
-import { capitalize } from '../../utils/util.ts';
+import ConversationSideBar from './ConversationSideBar.tsx';
+import DataSource from '../Drawer/DataSource.tsx';
+import { fetchModelName, getCurrentTimeStamp } from '../../utils/util.ts';
 
-const Container = styled.main`
-  display: flex;
-  flex-direction: column;
-`;
+interface ConversationProps {
+  title?: string;
+}
 
-const Info = styled.div`
-  display: flex;
-  justify-content: center;
-  flex-direction: column;
-  width: 95%;
-  flex-grow: 1;
-  margin: auto;
-  gap: 5px;
-
-  & p {
-    color: var(--color-gray-2);
-    font-size: 4rem;
-    text-align: center;
-  }
-`;
-
-const ScrollableContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  flex-grow: 1;
-  height: 60vh;
-  overflow-y: auto;
-  scroll-behavior: smooth;
-  gap: 1rem;
-
-  & > *:first-child {
-    margin-top: 8px;
-  }
-`;
-
-export const StyledModelWrapper = styled.div<{ $hasMargin?: boolean }>`
-  display: flex;
-  justify-content: flex-end;
-  margin: ${({ $hasMargin = false }) => ($hasMargin ? '0 1rem 1rem 0' : '0')};
-`;
-
-const StyledModel = styled.a`
-  font-weight: bold;
-  color: var(--color-primary-blue);
-  font-family: Arial, sans-serif;
-  font-size: 1rem;
-  font-style: italic;
-  margin: 1rem 1rem 0 0;
-`;
-
-const Conversation: FC = () => {
-  const { t } = useTranslation();
+const Conversation: FC<ConversationProps> = ({ title = 'ChatQnA' }) => {
   const [modelName, setModelName] = useState<string>('');
+  const [hasLLMResponse, setHasLLMResponse] = useState<boolean>(false);
+  const [fileUploadOpened, setFileUploadOpened] = useState<boolean>(false);
+  const [prompt, setPrompt] = useState<string>('');
 
   const dispatch = useAppDispatch();
-  const { conversations, onGoingResult, selectedConversationId, isGenerating } =
-    useAppSelector(conversationSelector);
+  const {
+    conversations,
+    onGoingResults,
+    selectedConversationId,
+    isGenerating,
+  } = useAppSelector(conversationSelector);
 
   const selectedConversation = conversations.find(
     (conversation) => conversation.conversationId === selectedConversationId,
   );
 
-  const selectedConversationTitle = selectedConversation?.title;
+  const selectedConversationTitle = selectedConversation?.title || 'New conversation';
   const { responseStatus = false } = selectedConversation || {};
 
   const scrollViewport = useRef<HTMLDivElement>(null);
+
+  const loadModelName = async () => {
+    const response = await fetchModelName();
+    if (response.status === 200) {
+      setModelName(response.llmModel);
+    }
+  };
 
   const scrollToBottom = () => {
     scrollViewport.current?.scrollTo({
@@ -92,7 +62,7 @@ const Conversation: FC = () => {
 
   useEffect(() => {
     scrollToBottom();
-  }, [onGoingResult, selectedConversation?.messages]);
+  }, [onGoingResults?.[selectedConversationId], selectedConversation?.messages]);
 
   useEffect(() => {
     const fetchFiles = async () => {
@@ -104,24 +74,98 @@ const Conversation: FC = () => {
     };
 
     fetchFiles();
-  }, [dispatch, t]);
+  }, [dispatch]);
+
+  useEffect(() => {
+    void loadModelName();
+  }, []);
+
+  useEffect(() => {
+    const hasAssistantReply =
+      selectedConversation?.messages?.some(
+        (message) => message.role === MessageRole.Assistant,
+      ) || false;
+    setHasLLMResponse(hasAssistantReply);
+  }, [selectedConversation?.messages]);
+
+  const handleNewConversation = () => {
+    dispatch(newConversation());
+    setPrompt('');
+  };
+
+  const handleSubmit = () => {
+    if (!prompt.trim()) {
+      return;
+    }
+
+    void loadModelName();
+
+    const userPrompt: Message = {
+      role: MessageRole.User,
+      content: prompt.trim(),
+      time: getCurrentTimeStamp(),
+      conversationId: selectedConversationId || '',
+    };
+    doConversation({ conversationId: selectedConversationId || '', userPrompt });
+    setPrompt('');
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      handleSubmit();
+    }
+  };
 
   const LLM_MODEL_URL: string = `https://huggingface.co/${modelName}`;
 
   return (
-    <Container data-testid='conversation-container'>
-      {selectedConversationTitle ? (
-        <Navigation>
-          <h4>{capitalize(selectedConversationTitle)}</h4>
-        </Navigation>
-      ) : null}
+    <Group align='stretch' gap={0} h='100vh' data-testid='conversation-container'>
+      <ConversationSideBar title={title} />
+      <Stack flex={1} gap={0}>
+        <Paper
+          radius={0}
+          p={0}
+          withBorder
+          style={{
+            backgroundColor: 'var(--mantine-color-blue-6)',
+            color: 'var(--color-white)',
+            height: '64px',
+            padding: '0 36px 0 16px',
+            boxSizing: 'border-box',
+          }}
+        >
+          <Group justify='space-between' style={{ width: '100%', height: '100%' }}>
+            <Title order={4}>{selectedConversationTitle}</Title>
+            <Group style={{ marginRight: '12px' }}>
+              <ActionIcon
+                variant='default'
+                size='lg'
+                radius='md'
+                onClick={handleNewConversation}
+                disabled={!!(selectedConversationId && isGenerating[selectedConversationId])}
+                aria-label='New conversation'
+              >
+                <IconMessagePlus size={18} />
+              </ActionIcon>
+              <ActionIcon
+                variant='default'
+                size='lg'
+                radius='md'
+                onClick={() => setFileUploadOpened(true)}
+                aria-label='Manage context'
+              >
+                <IconFilePlus size={18} />
+              </ActionIcon>
+            </Group>
+          </Group>
+        </Paper>
 
-      {!selectedConversationId ? (
-        <Info>
-          <Textarea rows={2} setModelName={setModelName} />
-        </Info>
-      ) : (
-        <ScrollableContainer ref={scrollViewport}>
+        <Stack flex={1} p='md' gap='sm' style={{ overflowY: 'auto' }} ref={scrollViewport}>
+          {!selectedConversation ? (
+            <Text c='dimmed'>Start by asking a question.</Text>
+          ) : null}
+
           {selectedConversation?.messages.map((message, index) => (
             <ConversationMessage
               key={index}
@@ -130,24 +174,44 @@ const Conversation: FC = () => {
               message={message.content}
             />
           ))}
-          {isGenerating && (
+
+          {(selectedConversationId &&
+            (isGenerating[selectedConversationId] || onGoingResults[selectedConversationId])) ? (
             <ConversationMessage
+              key={`ongoing-${selectedConversationId}`}
               date={Date.now()}
               human={false}
-              message={onGoingResult}
-              isGenerating={isGenerating}
+              message={onGoingResults[selectedConversationId] || ''}
+              showBlinkingIndicator={!!isGenerating[selectedConversationId]}
             />
-          )}
-          {responseStatus && (
-            <StyledModelWrapper $hasMargin={true}>
-              <StyledModel href={LLM_MODEL_URL} target='_blank'>
+          ) : null}
+
+          {(responseStatus || hasLLMResponse) && modelName ? (
+            <Group justify='flex-end'>
+              <Anchor href={LLM_MODEL_URL} target='_blank' size='sm'>
                 {modelName}
-              </StyledModel>
-            </StyledModelWrapper>
-          )}
-        </ScrollableContainer>
-      )}
-    </Container>
+              </Anchor>
+            </Group>
+          ) : null}
+        </Stack>
+
+        <Paper radius={0} p='md' withBorder>
+          <Textarea
+            rows={2}
+            setModelName={setModelName}
+            value={prompt}
+            onChange={setPrompt}
+            onSubmit={handleSubmit}
+            onKeyDown={handleKeyDown}
+          />
+        </Paper>
+      </Stack>
+
+      <DataSource
+        opened={fileUploadOpened}
+        onClose={() => setFileUploadOpened(false)}
+      />
+    </Group>
   );
 };
 

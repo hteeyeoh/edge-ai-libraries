@@ -33,6 +33,11 @@ app.add_middleware(
 )
 
 
+class Message(BaseModel):
+    role: str
+    content: str
+
+
 class ChatRequest(BaseModel):
     '''
     Represents a chat request containing the input question and options for response type.
@@ -42,7 +47,8 @@ class ChatRequest(BaseModel):
         input (str): The input question text to be processed.
         stream (bool): Flag indicating whether to return the response as a stream or not. Defaults to True.
     '''
-    input: str
+    input: str = ""
+    conversation_messages: list[Message] | None = None
     stream: bool = True
 
 
@@ -260,7 +266,29 @@ async def query_chat(request: ChatRequest):
         HHTTPException: If the input question text is empty or not provided, a HTTPStatus.UNPROCESSABLE_ENTITY is returned.
     """
 
-    if not request.input or request.input == "":
+    question_text = ""
+    history_text = ""
+
+    if request.conversation_messages:
+        valid_messages = [
+            message
+            for message in request.conversation_messages
+            if message.content is not None
+        ]
+        if not valid_messages:
+            raise HTTPException(
+                status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                detail="Question is required.",
+            )
+
+        question_text = valid_messages[-1].content
+        history_text = "\n".join(
+            f"{message.role}: {message.content}" for message in valid_messages[:-1]
+        )
+    else:
+        question_text = request.input
+
+    if not question_text or not question_text.strip():
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY, detail="Question is required."
         )
@@ -271,8 +299,10 @@ async def query_chat(request: ChatRequest):
 
     rag_chain = build_chain(retriever)
 
+    chain_input = {"question": question_text, "history": history_text}
+
     if request.stream == False:
-        response = rag_chain.invoke(request.input)
+        response = rag_chain.invoke(chain_input)
         et = time.perf_counter()
         logger.info(f"Time taken {et - st}")
 
@@ -281,7 +311,7 @@ async def query_chat(request: ChatRequest):
     else:
 
         return StreamingResponse(
-            process_query(rag_chain, request.input), media_type="text/event-stream"
+            process_query(rag_chain, chain_input), media_type="text/event-stream"
         )
 
 

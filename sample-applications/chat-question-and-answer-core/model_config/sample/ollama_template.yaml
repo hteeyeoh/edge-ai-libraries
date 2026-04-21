@@ -21,14 +21,19 @@ model_settings:
   KEEP_ALIVE: -1
 
   # Prompt template used by the assistant to generate answers.
-  # Ensure placeholders like {context} and {question} are preserved.
+  # Ensure placeholders like {history}, {context} and {question} are preserved.
   # Optional: Adjust the template to match your model's requirements.
   #           If did not provde, will use the default template defined in the application.
   PROMPT_TEMPLATE: >
     <|system|>
     Use the following pieces of context from retrieved
-    dataset to answer the question. Do not make up an answer if there is no
+    dataset and prior conversation history to answer the question. Do not make up an answer if there is no
     context provided to help answer it.<|end|>
+
+    <|history|>
+    Conversation history:
+    {history}
+    <|end|>
 
     <|context|>
     Context:

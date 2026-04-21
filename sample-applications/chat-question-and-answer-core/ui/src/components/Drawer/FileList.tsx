@@ -1,24 +1,14 @@
 // Copyright (C) 2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEffect, useState, type FC } from 'react';
-import styled from 'styled-components';
+import { useEffect, useState, type FC, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Document } from '@carbon/icons-react';
-import {
-  Tab,
-  TabList,
-  TabPanels,
-  Tabs,
-  TabPanel,
-  Tag,
-  Button,
-} from '@carbon/react';
+import { Badge, Button, Tabs } from '@mantine/core';
+import { IconFileText } from '@tabler/icons-react';
 
 import { useAppSelector } from '../../redux/store.ts';
 import { conversationSelector } from '../../redux/conversation/conversationSlice.ts';
 import FileLinkManager from './FileLinkManager.tsx';
-import { Icon } from '../Navbar/Navbar.tsx';
 import DataSource from './DataSource.tsx';
 
 interface FileListProps {
@@ -26,62 +16,13 @@ interface FileListProps {
   isOpen: boolean;
 }
 
-const StyledMessage = styled.div`
-  margin: auto;
-  margin-top: 1rem;
-  color: var(--color-dark-0);
-  line-height: 1.3;
-`;
+export const TitleContainer: FC<{ children: ReactNode }> = ({ children }) => (
+  <div style={{ display: 'flex', alignItems: 'center' }}>{children}</div>
+);
 
-export const CountTag = styled(Tag)`
-  position: absolute;
-  top: -1rem;
-  right: -1.5rem;
-  font-size: 0.6rem;
-  min-inline-size: 1rem;
-`;
-
-export const TitleContainer = styled.div`
-  display: flex;
-  align-items: center;
-
-  .mr-8 {
-    margin-right: 8px;
-  }
-`;
-
-const FlexContainerWithCount = styled(TitleContainer)`
-  position: relative;
-  font-size: 1.1rem;
-  font-weight: 400;
-`;
-
-const StyledTabPanel = styled(TabPanel)`
-  background-color: var(--color-white) !important;
-`;
-
-const StickyTabs = styled(TabList)`
-  position: sticky;
-  top: 0;
-  background-color: var(--color-white);
-  z-index: 1;
-`;
-
-const FullWidthButton = styled(Button)`
-  min-width: 100%;
-  margin-bottom: 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding-block: 0;
-  padding-inline: 0;
-  font-size: 1.1rem;
-`;
-
-export const SmallPara = styled.p`
-  font-size: 1rem;
-  margin-bottom: 1rem;
-`;
+export const SmallPara: FC<{ children: ReactNode }> = ({ children }) => (
+  <p style={{ fontSize: '1rem', marginBottom: '1rem' }}>{children}</p>
+);
 
 const FileList: FC<FileListProps> = ({ closeDrawer, isOpen }) => {
   const { t } = useTranslation();
@@ -99,41 +40,84 @@ const FileList: FC<FileListProps> = ({ closeDrawer, isOpen }) => {
   }, [isOpen]);
 
   return (
-    <Tabs data-testid='file-list-tabs'>
-      <StickyTabs aria-label={t('documents')} contained>
-        <Tab>
-          <FlexContainerWithCount>
-            <Document className='mr-8 mt-2p' size='1.2rem' />
+    <Tabs defaultValue='files' data-testid='file-list-tabs'>
+      <Tabs.List
+        style={{
+          position: 'sticky',
+          top: 0,
+          backgroundColor: 'var(--color-white)',
+          zIndex: 1,
+        }}
+      >
+        <Tabs.Tab value='files'>
+          <div
+            style={{
+              position: 'relative',
+              fontSize: '1.1rem',
+              fontWeight: 400,
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            <IconFileText size={18} style={{ marginRight: '8px' }} />
             {t('files')}
-            <CountTag>{files.length}</CountTag>
-          </FlexContainerWithCount>
-        </Tab>
-      </StickyTabs>
+            <Badge
+              size='xs'
+              variant='filled'
+              color='blue'
+              style={{
+                position: 'absolute',
+                top: '-1rem',
+                right: '-1.5rem',
+                fontSize: '0.6rem',
+                minInlineSize: '1rem',
+              }}
+            >
+              {files.length}
+            </Badge>
+          </div>
+        </Tabs.Tab>
+      </Tabs.List>
 
-      <TabPanels>
-        <StyledTabPanel>
+      <Tabs.Panel value='files'>
+        <div style={{ backgroundColor: 'var(--color-white)' }}>
           {showUploadForm ? (
             <>
               <SmallPara>{t('uploadFileDescription')}</SmallPara>
               <DataSource close={closeDrawer} />
             </>
           ) : (
-            <FullWidthButton kind='primary' onClick={handleButtonClick}>
-              <Icon>+</Icon>
+            <Button
+              onClick={handleButtonClick}
+              style={{
+                minWidth: '100%',
+                marginBottom: '1rem',
+                fontSize: '1.1rem',
+              }}
+            >
+              +
               {t('addNewFile')}
-            </FullWidthButton>
+            </Button>
           )}
 
           {files.length === 0 ? (
-            <StyledMessage>{t('noFilesFound')}</StyledMessage>
+            <div
+              style={{
+                margin: '1rem auto 0',
+                color: 'var(--color-dark-0)',
+                lineHeight: 1.3,
+              }}
+            >
+              {t('noFilesFound')}
+            </div>
           ) : (
             <FileLinkManager
               showField={showUploadForm}
               closeDrawer={closeDrawer}
             />
           )}
-        </StyledTabPanel>
-      </TabPanels>
+        </div>
+      </Tabs.Panel>
     </Tabs>
   );
 };

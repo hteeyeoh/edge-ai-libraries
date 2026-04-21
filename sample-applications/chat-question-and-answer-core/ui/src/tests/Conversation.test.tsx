@@ -47,8 +47,10 @@ describe('Conversation Component test suite', () => {
         conversation: {
           conversations: [],
           selectedConversationId: '',
-          isGenerating: false,
-          onGoingResult: '',
+          isGenerating: {},
+          onGoingResults: {},
+          isWaitingForFirstToken: {},
+          isUploading: false,
           files: [],
           ...initialState,
         },
@@ -138,8 +140,8 @@ describe('Conversation Component test suite', () => {
         },
       ],
       selectedConversationId: '1',
-      isGenerating: true,
-      onGoingResult: 'Generating...',
+      isGenerating: { '1': true },
+      onGoingResults: { '1': 'Generating...' },
     };
     renderComponent(initialState);
 

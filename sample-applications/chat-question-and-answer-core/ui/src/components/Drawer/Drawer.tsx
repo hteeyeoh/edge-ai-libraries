@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { FC, ReactNode } from 'react';
-import styled from 'styled-components';
 import { useTranslation } from 'react-i18next';
 
 import { Navigation } from '../Conversation/ConversationSideBar.tsx';
@@ -14,70 +13,65 @@ interface DrawerProps {
   children?: ReactNode;
 }
 
-const DrawerWrapper = styled.div<{ $isOpen: boolean }>`
-  position: fixed;
-  top: 0;
-  right: 0;
-  height: 100%;
-  width: 450px;
-  background-color: var(--color-white);
-  background-color: var(--color-white);
-  box-shadow: -2px 0 5px var(--color-data-source-bs);
-  transform: ${({ $isOpen }) =>
-    $isOpen ? 'translateX(0)' : 'translateX(100%)'};
-  transition: transform 0.3s ease-in-out;
-  z-index: 1000;
-  display: flex;
-  flex-direction: column;
-`;
-
-const CloseButton = styled.button`
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-
-  &:hover,
-  &:visited,
-  &:link,
-  &:active {
-    color: var(--color-info);
-  }
-`;
-
-const Overlay = styled.div<{ $isOpen: boolean }>`
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: var(--color-data-source-bg);
-  opacity: ${({ $isOpen }) => ($isOpen ? '1' : '0')};
-  visibility: ${({ $isOpen }) => ($isOpen ? 'visible' : 'hidden')};
-  transition:
-    opacity 0.3s ease-in-out,
-    visibility 0.3s ease-in-out;
-  z-index: 999;
-`;
-
-const DrawerNavigation = styled(Navigation)`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-`;
-
 const Drawer: FC<DrawerProps> = ({ title, isOpen, close, children }) => {
   const { t } = useTranslation();
   return (
     <>
-      <Overlay $isOpen={isOpen} onClick={close} data-testid='overlay' />
-      <DrawerWrapper $isOpen={isOpen} data-testid='drawer-wrapper'>
-        <DrawerNavigation>
+      <div
+        onClick={close}
+        data-testid='overlay'
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'var(--color-data-source-bg)',
+          opacity: isOpen ? '1' : '0',
+          visibility: isOpen ? 'visible' : 'hidden',
+          transition: 'opacity 0.3s ease-in-out, visibility 0.3s ease-in-out',
+          zIndex: 999,
+        }}
+      />
+      <div
+        data-testid='drawer-wrapper'
+        style={{
+          position: 'fixed',
+          top: 0,
+          right: 0,
+          height: '100%',
+          width: '450px',
+          backgroundColor: 'var(--color-white)',
+          boxShadow: '-2px 0 5px var(--color-data-source-bs)',
+          transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
+          transition: 'transform 0.3s ease-in-out',
+          zIndex: 1000,
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        <Navigation
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
           <h4>{title || t('drawerTitle')}</h4>
-          <CloseButton onClick={close}>&times;</CloseButton>
-        </DrawerNavigation>
+          <button
+            onClick={close}
+            style={{
+              background: 'none',
+              border: 'none',
+              fontSize: '1.5rem',
+              cursor: 'pointer',
+            }}
+          >
+            &times;
+          </button>
+        </Navigation>
         {children}
-      </DrawerWrapper>
+      </div>
     </>
   );
 };

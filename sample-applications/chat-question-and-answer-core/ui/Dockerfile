@@ -21,14 +21,14 @@ USER user
 WORKDIR /user/app
 
 # Copy only necessary files for dependency installation
-COPY package*.json /user/app/
-COPY .npmrc /user/app/
+COPY --chown=user:user package*.json /user/app/
+COPY --chown=user:user .npmrc /user/app/
 
 # Install dependencies using clean install
 RUN ["npm", "ci"]
 
 # Copy the rest of the application source code
-COPY . .
+COPY --chown=user:user . .
 
 # Build the Vite application
 RUN ["npm", "run", "build"]

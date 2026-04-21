@@ -12,9 +12,8 @@ import {
   Dispatch,
   SetStateAction,
 } from 'react';
-import { IconButton, TextArea } from '@carbon/react';
-import { SendFilled } from '@carbon/icons-react';
-import styled from 'styled-components';
+import { ActionIcon, Group, Textarea as MantineTextarea } from '@mantine/core';
+import { IconArrowRight } from '@tabler/icons-react';
 import { useTranslation } from 'react-i18next';
 
 import { Message, MessageRole } from '../../redux/conversation/conversation.ts';
@@ -26,62 +25,46 @@ import {
 import { NotificationSeverity, notify } from '../Notification/notify.ts';
 import { useAppSelector } from '../../redux/store.ts';
 
-export const StyledTextArea = styled(TextArea)<{ $borderRadius?: number }>`
-  textarea {
-    resize: none;
-    overflow: hidden;
-    font-size: 16px;
-    border-radius: ${({ $borderRadius = 0 }) => $borderRadius}px;
-  }
-
-  textarea:focus,
-  textarea:active {
-    overflow-y: auto;
-  }
-
-  textarea::placeholder {
-    font-size: 1.05rem;
-  }
-`;
-
-const TextareaWrapper = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-`;
-
-const EnterButton = styled(IconButton)`
-  justify-self: end;
-  height: 2rem;
-`;
-
-const StyledHeader = styled.h3`
-  text-align: center;
-  color: var(--color-gray-2);
-`;
-
 interface TextareaProps {
   rows?: number;
   setModelName: Dispatch<SetStateAction<string>>;
+  value?: string;
+  onChange?: (value: string) => void;
+  onSubmit?: () => void;
+  onKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
 }
 
-const Textarea: FC<TextareaProps> = ({ rows = 1, setModelName }) => {
+const Textarea: FC<TextareaProps> = ({
+  rows = 1,
+  setModelName,
+  value,
+  onChange,
+  onSubmit,
+  onKeyDown,
+}) => {
   const { t } = useTranslation();
   const [prompt, setPrompt] = useState<string>('');
   const [isPromptValid, setIsPromptValid] = useState<boolean>(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { isGenerating, files = [] } =
+  const { isGenerating, selectedConversationId } =
     useAppSelector(conversationSelector) || {};
+  const isCurrentConversationGenerating =
+    !!isGenerating?.[selectedConversationId || ''];
+  const promptValue = value ?? prompt;
 
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.focus();
     }
-  }, [textareaRef]);
+  }, []);
 
   const handleChange = (event: ChangeEvent<HTMLTextAreaElement>): void => {
     const value = event.target.value;
-    setPrompt(value);
+    if (onChange) {
+      onChange(value);
+    } else {
+      setPrompt(value);
+    }
     setIsPromptValid(value.trim().length > 0);
   };
 
@@ -98,14 +81,27 @@ const Textarea: FC<TextareaProps> = ({ rows = 1, setModelName }) => {
   };
 
   const handleSubmit = () => {
-    if (!prompt.trim()) {
-      setPrompt('');
+    if (isCurrentConversationGenerating) {
+      notify(t('showNotificationWhileStreaming'), NotificationSeverity.WARNING);
+      return;
+    }
+
+    if (!promptValue.trim()) {
+      if (!onChange) {
+        setPrompt('');
+      }
       setIsPromptValid(false);
       return;
     }
+
+    if (onSubmit) {
+      onSubmit();
+      return;
+    }
+
     const userPrompt: Message = {
       role: MessageRole.User,
-      content: prompt.trim(),
+      content: promptValue.trim(),
       time: getCurrentTimeStamp(),
       conversationId: '',
     };
@@ -113,22 +109,29 @@ const Textarea: FC<TextareaProps> = ({ rows = 1, setModelName }) => {
     setLLMModel();
 
     doConversation({
+      conversationId: selectedConversationId || '',
       userPrompt,
     });
-    setPrompt('');
+    if (!onChange) {
+      setPrompt('');
+    }
     setIsPromptValid(false);
   };
 
   const handleKeyDown: KeyboardEventHandler<HTMLTextAreaElement> = (
     event: KeyboardEvent<HTMLTextAreaElement>,
   ) => {
-    if (isGenerating && event.key === 'Enter') {
+    if (isCurrentConversationGenerating && event.key === 'Enter') {
       event.preventDefault();
       notify(t('showNotificationWhileStreaming'), NotificationSeverity.WARNING);
       return;
     }
-    if (!prompt && event.key === 'Enter') {
+    if (!promptValue && event.key === 'Enter') {
       event.preventDefault();
+      return;
+    }
+    if (onKeyDown) {
+      onKeyDown(event);
       return;
     }
     if (!event.shiftKey && event.key === 'Enter') {
@@ -137,34 +140,35 @@ const Textarea: FC<TextareaProps> = ({ rows = 1, setModelName }) => {
     }
   };
 
-  const placeholderText: string =
-    t('modelIntro') + (files.length ? t('withContext') : t('withoutContext'));
+  const placeholderText: string = t('askQuestionPlaceholder');
 
   return (
     <>
-      <StyledHeader data-testid='textarea-intro'>{t('intro')}</StyledHeader>
-      <TextareaWrapper data-testid='textarea-wrapper'>
-        <StyledTextArea
+      <Group align='flex-end' gap='sm' data-testid='textarea-wrapper' wrap='nowrap'>
+        <MantineTextarea
           ref={textareaRef}
-          labelText=''
           placeholder={placeholderText}
-          value={prompt}
+          value={promptValue}
           onKeyDown={handleKeyDown}
           onChange={handleChange}
+          autosize
+          minRows={rows}
+          maxRows={8}
+          style={{ flex: 1 }}
           rows={rows}
           data-testid='prompt-textarea'
         />
-        <EnterButton
-          label={prompt.trim() === '' ? t('emptyMessage') : t('submit')}
+        <ActionIcon
+          aria-label={promptValue.trim() === '' ? t('emptyMessage') : t('submit')}
           onClick={handleSubmit}
-          align='left'
-          kind='primary'
-          disabled={!isPromptValid || isGenerating}
+          size='lg'
+          variant='filled'
+          disabled={!isPromptValid || isCurrentConversationGenerating}
           data-testid='submit-prompt'
         >
-          <SendFilled />
-        </EnterButton>
-      </TextareaWrapper>
+          <IconArrowRight size={16} />
+        </ActionIcon>
+      </Group>
     </>
   );
 };
