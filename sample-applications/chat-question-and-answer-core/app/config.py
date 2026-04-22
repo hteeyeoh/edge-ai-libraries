@@ -72,6 +72,7 @@ class Settings(BaseSettings):
     SEARCH_METHOD: str = "similarity"
     FETCH_K: int = 10
     SIMILARITY_SCORE_THRESHOLD: float = 0.35
+    ENABLE_LLM_CHAIN_EXTRACTOR: bool = False
     KEEP_ALIVE: Union[str, int, None] = None
 
     # These fields will not be affected by environment variables

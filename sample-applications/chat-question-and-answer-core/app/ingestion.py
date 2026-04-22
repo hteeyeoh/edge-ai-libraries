@@ -1,6 +1,7 @@
 from .config import config
 from .logger import logger
 from langchain_core.documents import Document
+<<<<<<< HEAD
 from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
 
 
@@ -37,6 +38,9 @@ def _split_markdown_by_headers(docs):
 
     logger.info("Markdown header split created %d sections.", len(split_docs))
     return split_docs
+=======
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+>>>>>>> 555cf7a1 (chatqna-core: Implement neighbors retriever)
 
 
 def _split_text_to_indexed_chunks(docs, chunk_size: int, chunk_overlap: int):
@@ -80,6 +84,7 @@ def _split_text_to_indexed_chunks(docs, chunk_size: int, chunk_overlap: int):
     return chunked_docs
 
 
+<<<<<<< HEAD
 def _index_presplit_docs(docs, chunk_size: int, chunk_overlap: int):
     indexed_docs = []
     total_chunks = len(docs)
@@ -109,6 +114,8 @@ def _index_presplit_docs(docs, chunk_size: int, chunk_overlap: int):
     return indexed_docs
 
 
+=======
+>>>>>>> 555cf7a1 (chatqna-core: Implement neighbors retriever)
 def split_documents_for_ingestion(
     docs,
     chunk_size: int,
@@ -133,6 +140,7 @@ def split_documents_for_ingestion(
     indexed_chunk_size = max(50, int(chunk_size))
     indexed_chunk_overlap = max(0, min(int(chunk_overlap), indexed_chunk_size // 2))
 
+<<<<<<< HEAD
     docs_to_chunk = docs
     if _is_markdown_file(file_path):
         logger.info("Applying MarkdownHeaderTextSplitter with aisle-level chunking.")
@@ -145,6 +153,10 @@ def split_documents_for_ingestion(
 
     return _split_text_to_indexed_chunks(
         docs_to_chunk,
+=======
+    return _split_text_to_indexed_chunks(
+        docs,
+>>>>>>> 555cf7a1 (chatqna-core: Implement neighbors retriever)
         chunk_size=indexed_chunk_size,
         chunk_overlap=indexed_chunk_overlap,
     )
