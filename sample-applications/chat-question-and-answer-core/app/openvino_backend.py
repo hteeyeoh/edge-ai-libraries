@@ -20,13 +20,16 @@ class OpenVINOBackend:
     def __init__(self):
         self.huggingface_token = config.HF_ACCESS_TOKEN
         self.cache_dir = config._CACHE_DIR
+        self.enable_rerank = config.ENABLE_RERANK
         self.embedding_model_id = config.EMBEDDING_MODEL_ID
         self.llm_model_id = config.LLM_MODEL_ID
-        self.reranker_model_id = config.RERANKER_MODEL_ID
         self.embedding_device = config.EMBEDDING_DEVICE
-        self.reranker_device = config.RERANKER_DEVICE
         self.llm_device = config.LLM_DEVICE
         self.max_tokens = config.MAX_TOKENS
+
+        if self.enable_rerank:
+            self.reranker_model_id = config.RERANKER_MODEL_ID
+            self.reranker_device = config.RERANKER_DEVICE
 
     def login_to_huggingface(self, token: str):
         """
@@ -170,15 +173,23 @@ class OpenVINOBackend:
         # Login to HuggingFace
         self.login_to_huggingface(self.huggingface_token)
 
-        # Download embedding, LLM, and reranker models from HuggingFace
+        # Download embedding and LLM models from HuggingFace
         self.download_huggingface_model(self.embedding_model_id, self.cache_dir)
-        self.download_huggingface_model(self.reranker_model_id, self.cache_dir)
         self.download_huggingface_model(self.llm_model_id, self.cache_dir)
+
+        if self.enable_rerank:
+            self.download_huggingface_model(self.reranker_model_id, self.cache_dir)
+        else:
+            logger.info("ENABLE_RERANK is false; skipping reranker model download.")
 
         # Convert models
         self.convert_model(self.embedding_model_id, self.cache_dir, "embedding")
-        self.convert_model(self.reranker_model_id, self.cache_dir, "reranker")
         self.convert_model(self.llm_model_id, self.cache_dir, "llm")
+
+        if self.enable_rerank:
+            self.convert_model(self.reranker_model_id, self.cache_dir, "reranker")
+        else:
+            logger.info("ENABLE_RERANK is false; skipping reranker model conversion.")
 
         # Initialize embedding model
         embedding = OpenVINOBgeEmbeddings(
@@ -188,11 +199,16 @@ class OpenVINOBackend:
         embedding.ov_model.compile()
 
         # Initialize reranker model
-        reranker = OpenVINOReranker(
-            model_name_or_path = os.path.join(self.cache_dir, self.reranker_model_id),
-            model_kwargs = {"device": self.reranker_device},
-            top_n = 2,
-        )
+        reranker = None
+        if self.enable_rerank:
+            rerank_top_n = config.RERANK_TOP_N
+            reranker = OpenVINOReranker(
+                model_name_or_path = os.path.join(self.cache_dir, self.reranker_model_id),
+                model_kwargs = {"device": self.reranker_device},
+                top_n = rerank_top_n,
+            )
+        else:
+            logger.info("ENABLE_RERANK is false; skipping reranker initialization.")
 
         # Initialize LLM
         llm = HuggingFacePipeline.from_model_id(

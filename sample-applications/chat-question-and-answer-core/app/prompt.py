@@ -21,6 +21,23 @@ default_rag_prompt_template = """
     Answer:
     """
 
+
+CONDENSE_QUESTION_TEMPLATE = """Given the recent conversation and the latest user question, rewrite the latest question as a standalone question.
+
+Rules:
+- Preserve product names and key terms exactly.
+- Keep intent faithful to the user message.
+- If the question is already standalone, return it unchanged.
+- Return only the rewritten question text, with no extra explanation.
+
+Conversation:
+{history}
+
+Latest user question:
+{question}
+
+Standalone question:"""
+
 # Define the prompt templates for validated model IDs
 model_prompt_templates = {
     "microsoft/Phi-3.5-mini-instruct": """

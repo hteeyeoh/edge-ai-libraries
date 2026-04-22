@@ -18,11 +18,13 @@ class OpenVINOValidator(BackendValidator):
         if not self.settings.HF_ACCESS_TOKEN:
             raise ValueError("HF_ACCESS_TOKEN must not be empty for 'openvino' backend.")
 
-        for model_name in ["EMBEDDING_MODEL_ID", "RERANKER_MODEL_ID", "LLM_MODEL_ID"]:
+        required_models = ["EMBEDDING_MODEL_ID", "LLM_MODEL_ID"]
+        if self.settings.ENABLE_RERANK:
+            required_models.append("RERANKER_MODEL_ID")
+
+        for model_name in required_models:
             if not getattr(self.settings, model_name):
                 raise ValueError(f"{model_name} must not be empty for 'openvino' backend.")
-
-        self.settings._ENABLE_RERANK = True
 
 
 class OllamaValidator(BackendValidator):
@@ -47,4 +49,6 @@ class OllamaValidator(BackendValidator):
             if not getattr(self.settings, model_name):
                 raise ValueError(f"{model_name} must not be empty for 'ollama' backend.")
 
-        self.settings._ENABLE_RERANK = False
+        if self.settings.ENABLE_RERANK:
+            print("WARNING - ENABLE_RERANK is not supported for 'ollama'. Forcing ENABLE_RERANK=False.")
+        self.settings.ENABLE_RERANK = False
