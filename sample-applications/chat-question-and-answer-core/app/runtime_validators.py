@@ -22,8 +22,6 @@ class OpenVINOValidator(BackendValidator):
             if not getattr(self.settings, model_name):
                 raise ValueError(f"{model_name} must not be empty for 'openvino' backend.")
 
-        self.settings._ENABLE_RERANK = True
-
 
 class OllamaValidator(BackendValidator):
     def validate(self):
@@ -47,4 +45,6 @@ class OllamaValidator(BackendValidator):
             if not getattr(self.settings, model_name):
                 raise ValueError(f"{model_name} must not be empty for 'ollama' backend.")
 
-        self.settings._ENABLE_RERANK = False
+        if self.settings.ENABLE_RERANK:
+            print("WARNING - ENABLE_RERANK is not supported for 'ollama'. Forcing ENABLE_RERANK=False.")
+        self.settings.ENABLE_RERANK = False

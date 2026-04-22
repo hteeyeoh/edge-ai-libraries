@@ -1,0 +1,83 @@
+# ChatQnA Core Application Configuration Template
+# Customize the values below to suit your application's requirements.
+
+model_settings:
+  # Runtime for model serving.
+  # Options: "ollama", "openvino"
+  MODEL_RUNTIME: "openvino"
+
+  # Embedding model used for vectorizing input text.
+  # Example: "BAAI/bge-small-en-v1.5"
+  EMBEDDING_MODEL_ID: "BAAI/bge-small-en-v1.5"
+
+  # Reranker model used to reorder retrieved results based on relevance.
+  # Example: "BAAI/bge-reranker-base"
+  RERANKER_MODEL_ID: "BAAI/bge-reranker-base"
+
+  # Large Language Model (LLM) used to generate responses.
+  # Example: "microsoft/Phi-3.5-mini-instruct"
+  LLM_MODEL_ID: "Intel/neural-chat-7b-v3-3"
+
+  # Prompt template used by the assistant to generate answers.
+  # Ensure placeholders like {history}, {context} and {question} are preserved.
+  # Optional: Adjust the template to match your model's requirements.
+  #           If did not provde, will use the default template defined in the application.
+  PROMPT_TEMPLATE: >
+    ### System:
+    You are the "MegaRetail Navigator," a helpful, efficient store assistant.
+    Your goal is to guide customers to products and explain store policies accurately.
+
+    ### Rules for your response:
+    1. **Context is Supreme:** If the Conversation History contradicts the provided Context, ALWAYS follow the Context. The Context contains the most up-to-date store shelf information.
+    2. **Strict Grounding:** Answer ONLY using the provided context.
+    3. **Paragraph Format:** Provide your answer as a single, cohesive paragraph (maximum 3-4 sentences). Do NOT use bullet points, bold headers, or lists.
+    3. **Be Scannable:** Use bullet points for lists. Avoid long paragraphs.
+    4. **Directional Help:** If the context mentions a "Wing" (North, South, East, West), include it to help the user navigate.
+    5. **Ambiguity:** If the user asks for a broad category (e.g., "Apples"), briefly list the varieties available in the context.
+    5. **Fallback:** If the answer is not in the context, say: "I'm sorry, I couldn't find that specific item in our digital directory. Please visit our **Customer Service Desk (Ground Floor, North Gate)** for further assistance."
+
+    ### Conversation History:
+    {history}
+
+    ### Context:
+    {context}
+
+    ### User Question:
+    {question}
+
+    ### Assistant:
+
+  # Optional: Maximum number of tokens in the model's response.
+  # Maximum token 1024. Not exceeding this limit to avoid errors.
+  MAX_TOKENS: 1024
+
+device_settings:
+  # Specify the device for each model. Options: "CPU", "GPU"
+  EMBEDDING_DEVICE: "CPU"
+  RERANKER_DEVICE: "CPU"
+  LLM_DEVICE: "CPU"
+
+ingestion_settings:
+  # Ingestion strategy.
+  # Options: "auto", "recursive", "semantic"
+  INGESTION_STRATEGY: "auto"
+
+  # Base chunk sizing for recursive/structured splitting.
+  CHUNK_SIZE: 1000
+  CHUNK_OVERLAP: 200
+
+retrieval_settings:
+  # Whether to enable reranking of retrieved results.
+  ENABLE_RERANK: True
+  # Search method for retrieval.
+  # Options: "similarity" for standard vector similarity search, "mmr" for Maximal Marginal Relevance which promotes diversity in results.
+  SEARCH_METHOD: "similarity"
+  # Number of vectorstore results fetched for retrieval.
+  FETCH_K: 10
+  # Enable the LLM to condense the user's question before retrieval, which can improve retrieval relevance for long or complex questions.
+  ENABLE_LLM_CONDENSE_QUESTION: True
+
+# Notes:
+# - Ensure all model IDs are valid and accessible.
+# - Prompt template must be properly formatted and include required placeholders.
+# - Adjust device settings based on your system's hardware capabilities.

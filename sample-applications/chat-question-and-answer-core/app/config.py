@@ -33,9 +33,6 @@ class Settings(BaseSettings):
         KEEP_ALIVE (Union[str, int, None]): Keep-alive setting for the application.
 
     Private Attributes:
-        _ENABLE_RERANK (bool): Whether reranking is enabled.
-        _SEARCH_METHOD (str): Search method used for retrieval.
-        _FETCH_K (int): Number of documents to fetch during retrieval.
         _CACHE_DIR (str): Directory for model cache.
         _HF_DATASETS_CACHE (str): Directory for Hugging Face datasets cache.
         _TMP_FILE_PATH (str): Temporary file path for documents.
@@ -66,12 +63,19 @@ class Settings(BaseSettings):
     RERANKER_DEVICE: str = "CPU"
     LLM_DEVICE: str = "CPU"
     MAX_TOKENS: int = 1024
+    ENABLE_LLM_CONDENSE_QUESTION: bool = True
+    INGESTION_STRATEGY: str = "auto"
+    CHUNK_SIZE: int = 1000
+    CHUNK_OVERLAP: int = 200
+    SEMANTIC_SIMILARITY_THRESHOLD: float = 0.78
+    SEMANTIC_MAX_TOKENS: int = 2000
+    ENABLE_RERANK: bool = True
+    SEARCH_METHOD: str = "similarity"
+    FETCH_K: int = 10
     KEEP_ALIVE: Union[str, int, None] = None
 
     # These fields will not be affected by environment variables
-    _ENABLE_RERANK: bool = PrivateAttr(True)
-    _SEARCH_METHOD: str = PrivateAttr("mmr")
-    _FETCH_K: int = PrivateAttr(10)
+    _CONDENSE_BUFFER_TURNS: int = PrivateAttr(4)
     _CACHE_DIR: str = PrivateAttr("/tmp/model_cache")
     _HF_DATASETS_CACHE: str = PrivateAttr("/tmp/model_cache")
     _TMP_FILE_PATH: str = PrivateAttr("/tmp/chatqna/documents")
@@ -94,7 +98,7 @@ class Settings(BaseSettings):
         with open(config_file, 'r') as f:
             config = yaml.safe_load(f)
 
-        for section in ("model_settings", "device_settings"):
+        for section in ("model_settings", "device_settings", "ingestion_settings", "retrieval_settings"):
             for key, value in config.get(section, {}).items():
                 if hasattr(self, key):
                     setattr(self, key, value)
