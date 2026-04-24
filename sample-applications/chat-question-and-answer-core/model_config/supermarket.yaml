@@ -58,13 +58,26 @@ device_settings:
   LLM_DEVICE: "CPU"
 
 ingestion_settings:
-  # Ingestion strategy.
-  # Options: "auto", "recursive", "semantic"
-  INGESTION_STRATEGY: "auto"
+  # Optional Unstructured API key. Leave empty for local partitioning.
+  UNSTRUCTURED_API_KEY: ""
 
-  # Base chunk sizing for recursive/structured splitting.
+  # If True, partition/chunk through Unstructured API.
+  UNSTRUCTURED_PARTITION_VIA_API: False
+
+  # Chunking strategy used by langchain-unstructured.
+  # Examples: "by_title", "basic"
+  UNSTRUCTURED_CHUNKING_STRATEGY: "basic"
+
+  # Partitioning strategy used by langchain-unstructured.
+  # Examples: "fast", "hi_res", "ocr_only"
+  UNSTRUCTURED_STRATEGY: "fast"
+
+  # Chunk sizing controls forwarded to UnstructuredLoader.
   CHUNK_SIZE: 1000
   CHUNK_OVERLAP: 200
+  UNSTRUCTURED_MAX_CHARACTERS: 4000
+  UNSTRUCTURED_NEW_AFTER_N_CHARS: 3800
+  UNSTRUCTURED_COMBINE_TEXT_UNDER_N_CHARS: 3500
 
 retrieval_settings:
   # Whether to enable reranking of retrieved results.

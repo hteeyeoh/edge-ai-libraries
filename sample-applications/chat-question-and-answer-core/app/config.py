@@ -64,11 +64,13 @@ class Settings(BaseSettings):
     LLM_DEVICE: str = "CPU"
     MAX_TOKENS: int = 1024
     ENABLE_LLM_CONDENSE_QUESTION: bool = True
-    INGESTION_STRATEGY: str = "auto"
     CHUNK_SIZE: int = 1000
     CHUNK_OVERLAP: int = 200
-    SEMANTIC_SIMILARITY_THRESHOLD: float = 0.78
-    SEMANTIC_MAX_TOKENS: int = 2000
+    UNSTRUCTURED_CHUNKING_STRATEGY: str = "by_title"
+    UNSTRUCTURED_STRATEGY: str = "fast"
+    UNSTRUCTURED_MAX_CHARACTERS: int = 1000
+    UNSTRUCTURED_NEW_AFTER_N_CHARS: int = 1000
+    UNSTRUCTURED_COMBINE_TEXT_UNDER_N_CHARS: int = 200
     ENABLE_RERANK: bool = True
     SEARCH_METHOD: str = "similarity"
     FETCH_K: int = 10

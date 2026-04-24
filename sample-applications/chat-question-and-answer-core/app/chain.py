@@ -1,5 +1,4 @@
 from .config import config
-from .document import load_file_document
 from .ingestion import split_documents_for_ingestion
 from .logger import logger
 from .prompt import CONDENSE_QUESTION_TEMPLATE
@@ -363,10 +362,8 @@ def create_faiss_vectordb(file_path: str = ""):
     chunk_size = config.CHUNK_SIZE
     chunk_overlap = config.CHUNK_OVERLAP
 
-    # Load the document from the /tmp path and create embedding
-    docs = load_file_document(file_path)
     splits = split_documents_for_ingestion(
-        docs,
+        docs=[],
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         file_path=file_path,

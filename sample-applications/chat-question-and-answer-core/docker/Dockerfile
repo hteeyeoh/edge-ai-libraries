@@ -65,6 +65,8 @@ WORKDIR $SETUP_PATH
 COPY poetry.lock pyproject.toml ./
 # Install runtime (prod) deps. Uses $POETRY_VIRTUALENVS_IN_PROJECT to create venv.
 RUN poetry install --with openvino --without dev --without ollama
+# Pre-install spaCy English model to avoid runtime write attempts in read-only/non-root site-packages.
+RUN poetry run python -m spacy download en_core_web_sm
 
 
 # `dev` image is used during development / testing
