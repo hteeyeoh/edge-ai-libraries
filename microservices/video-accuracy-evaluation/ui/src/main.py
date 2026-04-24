@@ -7,6 +7,7 @@ import logging
 import requests
 import os
 import pandas as pd
+import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -50,6 +51,54 @@ METRIC_DESC= {
 def show_metric_description(choice):
     """Function to display the description for the selected option."""
     return METRIC_DESC.get(choice, "No description available.")
+
+
+def preview_uploaded_file(file):
+    """Extract and display Reference/Generated sections from uploaded markdown."""
+    if file is None:
+        return (
+            gr.update(value="", visible=False),
+            gr.update(value="", visible=False),
+        )
+
+    file_ext = os.path.splitext(file.name)[1].lower()
+    if file_ext != ".md":
+        return (
+            gr.update(value="Unsupported file format. Please upload a .md file.", visible=True),
+            gr.update(value="Unsupported file format. Please upload a .md file.", visible=True),
+        )
+
+    try:
+        with open(file.name, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Split content by markdown headings like: ## Reference / ## Generated
+        parts = re.split(r"(?im)^\s{0,3}#{1,6}\s*(Reference|Generated)\s*$", content)
+
+        sections = {}
+        for i in range(1, len(parts), 2):
+            key = parts[i].strip().lower()
+            value = parts[i + 1].strip() if i + 1 < len(parts) else ""
+            sections[key] = value
+
+        reference_text = sections.get("reference", "")
+        generated_text = sections.get("generated", "")
+
+        if not reference_text:
+            reference_text = "Reference section not found in uploaded file."
+        if not generated_text:
+            generated_text = "Generated section not found in uploaded file."
+
+        return (
+            gr.update(value=reference_text, visible=True),
+            gr.update(value=generated_text, visible=True),
+        )
+    except Exception as e:
+        error_msg = f"Failed to read uploaded file: {str(e)}"
+        return (
+            gr.update(value=error_msg, visible=True),
+            gr.update(value=error_msg, visible=True),
+        )
 
 def submit_file(file):
     if file is None:
@@ -241,7 +290,28 @@ def create_ui():
                     file_types=[".md"],
                     file_count="single"
                 )
+
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        gr.Markdown("### Reference")
+                        reference_preview = gr.Markdown(
+                            value="",
+                            visible=False
+                        )
+                    with gr.Column(scale=1):
+                        gr.Markdown("### Generated")
+                        generated_preview = gr.Markdown(
+                            value="",
+                            visible=False
+                        )
+
                 submit_button = gr.Button("Submit")
+
+                file_input.change(
+                    fn=preview_uploaded_file,
+                    inputs=[file_input],
+                    outputs=[reference_preview, generated_preview]
+                )
 
                 # Output display component
                 result_table = gr.Dataframe(
