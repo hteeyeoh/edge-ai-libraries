@@ -1,7 +1,42 @@
 from .config import config
 from .logger import logger
 from langchain_core.documents import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
+
+
+def _is_markdown_file(file_path) -> bool:
+    return bool(file_path) and str(file_path).lower().endswith(".md")
+
+
+def _split_markdown_by_headers(docs):
+    header_splitter = MarkdownHeaderTextSplitter(
+        headers_to_split_on=[
+            ("##", "header_2"),
+        ]
+    )
+
+    split_docs = []
+    for doc in docs:
+        text = (doc.page_content or "").strip()
+        if not text:
+            continue
+
+        base_metadata = dict(doc.metadata or {})
+        markdown_sections = header_splitter.split_text(text)
+
+        for section in markdown_sections:
+            section_text = (section.page_content or "").strip()
+            if not section_text:
+                continue
+
+            metadata = dict(base_metadata)
+            metadata.update(dict(section.metadata or {}))
+            if "header_2" in metadata:
+                section_text = f"## {metadata['header_2']}\n\n{section_text}"
+            split_docs.append(Document(page_content=section_text, metadata=metadata))
+
+    logger.info("Markdown header split created %d sections.", len(split_docs))
+    return split_docs
 
 
 def _split_text_to_indexed_chunks(docs, chunk_size: int, chunk_overlap: int):
@@ -45,6 +80,35 @@ def _split_text_to_indexed_chunks(docs, chunk_size: int, chunk_overlap: int):
     return chunked_docs
 
 
+def _index_presplit_docs(docs, chunk_size: int, chunk_overlap: int):
+    indexed_docs = []
+    total_chunks = len(docs)
+
+    for index, doc in enumerate(docs):
+        text = (doc.page_content or "").strip()
+        if not text:
+            continue
+
+        metadata = dict(doc.metadata or {})
+        source = str(metadata.get("source", "unknown"))
+        metadata.update(
+            {
+                "chunk_index": index,
+                "chunk_size": int(chunk_size),
+                "chunk_overlap": int(chunk_overlap),
+                "source_doc_id": source,
+                "source_total_chunks": total_chunks,
+            }
+        )
+        indexed_docs.append(Document(page_content=text, metadata=metadata))
+
+    logger.info(
+        "Markdown ingestion created %d aisle-level indexed chunks.",
+        len(indexed_docs),
+    )
+    return indexed_docs
+
+
 def split_documents_for_ingestion(
     docs,
     chunk_size: int,
@@ -69,8 +133,18 @@ def split_documents_for_ingestion(
     indexed_chunk_size = max(50, int(chunk_size))
     indexed_chunk_overlap = max(0, min(int(chunk_overlap), indexed_chunk_size // 2))
 
+    docs_to_chunk = docs
+    if _is_markdown_file(file_path):
+        logger.info("Applying MarkdownHeaderTextSplitter with aisle-level chunking.")
+        docs_to_chunk = _split_markdown_by_headers(docs)
+        return _index_presplit_docs(
+            docs_to_chunk,
+            chunk_size=indexed_chunk_size,
+            chunk_overlap=indexed_chunk_overlap,
+        )
+
     return _split_text_to_indexed_chunks(
-        docs,
+        docs_to_chunk,
         chunk_size=indexed_chunk_size,
         chunk_overlap=indexed_chunk_overlap,
     )

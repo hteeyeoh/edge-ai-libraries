@@ -6,7 +6,8 @@ from fastapi import UploadFile
 from langchain_community.document_loaders import (
     PyPDFLoader,
     Docx2txtLoader,
-    TextLoader
+    TextLoader,
+    CSVLoader
 )
 
 
@@ -76,6 +77,10 @@ def load_file_document(file_path):
         loader = PyPDFLoader(file_path)
     elif file_path.suffix.lower() == ".docx":
         loader = Docx2txtLoader(file_path)
+    elif file_path.suffix.lower() == ".md":
+        loader = TextLoader(file_path)
+    elif file_path.suffix.lower() == ".csv":
+        loader = CSVLoader(file_path)
     else:
         loader = TextLoader(
             file_path=file_path

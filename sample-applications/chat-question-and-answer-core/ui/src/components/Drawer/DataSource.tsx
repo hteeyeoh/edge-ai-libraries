@@ -28,7 +28,7 @@ import {
 } from '../../redux/conversation/conversationSlice.ts';
 import { notify } from '../../components/Notification/notify.ts';
 import { NotificationSeverity } from '../../components/Notification/notify.ts';
-import { acceptedFormat, MAX_FILE_SIZE } from '../../utils/constant.ts';
+import { MAX_FILE_SIZE, plainAcceptedFormat } from '../../utils/constant.ts';
 
 interface DataSourceProps {
   buttonDisabled?: boolean;
@@ -153,7 +153,12 @@ const DataSource: FC<DataSourceProps> = ({ close, opened, onClose }) => {
         return;
       }
       const fileSizeMB = selectedFile.size / 1024 / 1024;
-      if (!acceptedFormat.includes(selectedFile.type)) {
+      const fileNameLower = selectedFile.name.toLowerCase();
+      const isSupportedExtension = plainAcceptedFormat.some((extension) =>
+        fileNameLower.endsWith(extension),
+      );
+
+      if (!isSupportedExtension) {
         notify(t('formatNotification'), NotificationSeverity.ERROR);
         setFile(null);
         setIsValidFile(false);
@@ -255,7 +260,7 @@ const DataSource: FC<DataSourceProps> = ({ close, opened, onClose }) => {
       <input
         ref={fileInputRef}
         type='file'
-        accept={acceptedFormat.join(',')}
+        accept={plainAcceptedFormat.join(',')}
         style={{ display: 'none' }}
         onChange={handleFileChange}
         data-testid='file-input-field'

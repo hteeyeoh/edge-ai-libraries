@@ -5,8 +5,16 @@ export const acceptedFormat: string[] = [
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'text/plain',
+  'text/markdown',
+  'text/csv',
 ];
 
-export const plainAcceptedFormat: string[] = ['.pdf', '.docx', '.txt'];
+export const plainAcceptedFormat: string[] = [
+  '.pdf',
+  '.docx',
+  '.txt',
+  '.md',
+  '.csv',
+];
 
 export const MAX_FILE_SIZE: number = 100;

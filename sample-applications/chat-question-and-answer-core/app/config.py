@@ -50,7 +50,7 @@ class Settings(BaseSettings):
 
     APP_DISPLAY_NAME: str = "Chatqna-Core"
     BASE_DIR: str = dirname(dirname(abspath(__file__)))
-    SUPPORTED_FORMATS: set = {".pdf", ".txt", ".docx"}
+    SUPPORTED_FORMATS: set = {".pdf", ".txt", ".docx", ".md", ".csv"}
     DEBUG: bool = False
 
     HF_ACCESS_TOKEN: str = ""
