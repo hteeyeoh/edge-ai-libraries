@@ -58,6 +58,10 @@ device_settings:
   LLM_DEVICE: "CPU"
 
 ingestion_settings:
+  # Chunking strategy for splitting documents.
+  # Options: "recursive" (default, general prose), "fixed" (uniform dense text),
+  #          "token" (LLM-token-aware), "section" (splits on ━━━/════/## headers — best for structured store docs)
+  CHUNKING_STRATEGY: "section"
   # Base chunking used for semantic retrieval.
   CHUNK_SIZE: 1200
   CHUNK_OVERLAP: 200
@@ -68,7 +72,6 @@ retrieval_settings:
   # Maximum number of docs returned by reranker before final top_k slicing.
   RERANK_TOP_N: 2
   # Search method for retrieval.
-<<<<<<< HEAD
   # Options:
   # - "similarity": standard top-k vector similarity
   # - "similarity_score_threshold": return docs above score threshold
@@ -81,19 +84,11 @@ retrieval_settings:
   # Lower value increases recall, higher value increases precision.
   SIMILARITY_SCORE_THRESHOLD: 0.35
   # Number of neighboring chunks to include before and after each retrieved seed chunk.
-  CONTEXT_WINDOW_NEIGHBORS: 3
-=======
-  # Options: "similarity" for standard vector similarity search, "mmr" for Maximal Marginal Relevance which promotes diversity in results.
-  SEARCH_METHOD: "similarity"
-  # Number of vectorstore results fetched for retrieval.
-  FETCH_K: 2
-  # Number of neighboring chunks to include before and after each retrieved seed chunk.
-  CONTEXT_WINDOW_NEIGHBORS: 3
+  CONTEXT_WINDOW_NEIGHBORS: 0
   # Whether to use LLMChainExtractor for condensing questions before retrieval, which can improve relevance for long or complex questions.
-  ENABLE_LLM_CHAIN_EXTRACTOR: True
->>>>>>> 555cf7a1 (chatqna-core: Implement neighbors retriever)
+  ENABLE_LLM_CHAIN_EXTRACTOR: False
   # Enable the LLM to condense the user's question before retrieval, which can improve retrieval relevance for long or complex questions.
-  ENABLE_LLM_CONDENSE_QUESTION: True
+  ENABLE_LLM_CONDENSE_QUESTION: False
 
 # Notes:
 # - Ensure all model IDs are valid and accessible.
