@@ -1,8 +1,8 @@
 from .config import config
 from .logger import logger
-<<<<<<< HEAD
 from langchain_community.retrievers import BM25Retriever
 from langchain_classic.retrievers.contextual_compression import ContextualCompressionRetriever
+from langchain_classic.retrievers.document_compressors import LLMChainExtractor
 from langchain_core.documents import Document
 from hashlib import sha1
 
@@ -22,14 +22,6 @@ class _BM25RetrieverWithVectorstore:
 
     def __getattr__(self, item):
         return getattr(self.bm25_retriever, item)
-=======
-from langchain_classic.retrievers.contextual_compression import ContextualCompressionRetriever
-from langchain_classic.retrievers.document_compressors import LLMChainExtractor
-from langchain_core.documents import Document
-from hashlib import sha1
-import importlib
-import os
->>>>>>> 555cf7a1 (chatqna-core: Implement neighbors retriever)
 
 
 def retrieve_enriched_context_docs(retriever, question: str, top_k: int = 5):
@@ -393,8 +385,6 @@ def _sampled_text_signature(text: str) -> str:
     return sha1(sampled.encode("utf-8")).hexdigest()
 
 
-<<<<<<< HEAD
-=======
 def _build_contextual_compressor(llm=None, reranker=None):
     """
     Build a contextual compressor for ContextualCompressionRetriever.
@@ -404,20 +394,16 @@ def _build_contextual_compressor(llm=None, reranker=None):
     if reranker is None:
         return None, "none"
 
-    use_llm_extractor = config.ENABLE_LLM_CHAIN_EXTRACTOR
-
-    if use_llm_extractor:
+    if config.ENABLE_LLM_CHAIN_EXTRACTOR:
         compressor = LLMChainExtractor.from_llm(llm)
         logger.info("Using LLMChainExtractor as contextual compressor.")
-    else:
-        compressor = reranker
-        logger.warning("USE_LLM_CHAIN_EXTRACTOR is enabled but LLMChainExtractor could not be loaded; falling back to reranker.")
+        return compressor, "llm_chain_extractor"
+
+    logger.info("Using reranker as contextual compressor.")
+    return reranker, "reranker"
 
 
-    return compressor, "reranker"
 
-
->>>>>>> 555cf7a1 (chatqna-core: Implement neighbors retriever)
 def build_retriever(vectorstore, llm=None, reranker=None):
     """
     Create and return the configured retriever, optionally wrapped with contextual compression.
@@ -426,7 +412,6 @@ def build_retriever(vectorstore, llm=None, reranker=None):
     enable_rerank = config.ENABLE_RERANK
     search_method = str(config.SEARCH_METHOD).lower()
     fetch_k = config.FETCH_K
-<<<<<<< HEAD
     score_threshold = config.SIMILARITY_SCORE_THRESHOLD
 
     logger.info(
@@ -434,13 +419,6 @@ def build_retriever(vectorstore, llm=None, reranker=None):
         search_method,
         fetch_k,
         score_threshold,
-=======
-
-    logger.info(
-        "Creating retriever with search method: %s, fetch_k: %d, rerank enabled: %s",
-        search_method,
-        fetch_k,
->>>>>>> 555cf7a1 (chatqna-core: Implement neighbors retriever)
         enable_rerank,
     )
 
@@ -451,9 +429,9 @@ def build_retriever(vectorstore, llm=None, reranker=None):
         retriever = vectorstore.as_retriever(
             search_type="mmr",
             search_kwargs={
-<<<<<<< HEAD
                 "k": fetch_k,
                 "fetch_k": 20,
+                "lambda_mult": 0.5,
             },
         )
     elif search_method == "bm25":
@@ -477,11 +455,6 @@ def build_retriever(vectorstore, llm=None, reranker=None):
             search_kwargs={
                 "k": fetch_k,
                 "score_threshold": score_threshold,
-=======
-                "k": 5,
-                "fetch_k": 20,
-                "lambda_mult": 0.5,
->>>>>>> 555cf7a1 (chatqna-core: Implement neighbors retriever)
             },
         )
     else:
@@ -493,21 +466,12 @@ def build_retriever(vectorstore, llm=None, reranker=None):
         )
 
     if enable_rerank:
-<<<<<<< HEAD
-        _ = llm
-        compressor = reranker
-=======
         compressor, compressor_name = _build_contextual_compressor(llm=llm, reranker=reranker)
->>>>>>> 555cf7a1 (chatqna-core: Implement neighbors retriever)
         if compressor is None:
             logger.warning("Rerank enabled but no compressor is available; proceeding without compression.")
             return retriever
 
-<<<<<<< HEAD
-        logger.info("Reranker enabled: %s, compressor: %s", enable_rerank, "reranker")
-=======
         logger.info("Reranker enabled: %s, compressor: %s", enable_rerank, compressor_name)
->>>>>>> 555cf7a1 (chatqna-core: Implement neighbors retriever)
         return ContextualCompressionRetriever(
             base_compressor=compressor,
             base_retriever=retriever,
