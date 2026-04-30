@@ -85,8 +85,6 @@ retrieval_settings:
   SIMILARITY_SCORE_THRESHOLD: 0.35
   # Number of neighboring chunks to include before and after each retrieved seed chunk.
   CONTEXT_WINDOW_NEIGHBORS: 0
-  # Whether to use LLMChainExtractor for condensing questions before retrieval, which can improve relevance for long or complex questions.
-  ENABLE_LLM_CHAIN_EXTRACTOR: False
   # Enable the LLM to condense the user's question before retrieval, which can improve retrieval relevance for long or complex questions.
   ENABLE_LLM_CONDENSE_QUESTION: False
 
