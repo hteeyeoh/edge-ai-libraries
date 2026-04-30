@@ -2,7 +2,6 @@ from .config import config
 from .logger import logger
 from langchain_community.retrievers import BM25Retriever
 from langchain_classic.retrievers.contextual_compression import ContextualCompressionRetriever
-from langchain_classic.retrievers.document_compressors import LLMChainExtractor
 from langchain_core.documents import Document
 from hashlib import sha1
 
@@ -385,25 +384,6 @@ def _sampled_text_signature(text: str) -> str:
     return sha1(sampled.encode("utf-8")).hexdigest()
 
 
-def _build_contextual_compressor(llm=None, reranker=None):
-    """
-    Build a contextual compressor for ContextualCompressionRetriever.
-    Uses LLMChainExtractor when enabled, otherwise falls back to reranker.
-    """
-
-    if reranker is None:
-        return None, "none"
-
-    if config.ENABLE_LLM_CHAIN_EXTRACTOR:
-        compressor = LLMChainExtractor.from_llm(llm)
-        logger.info("Using LLMChainExtractor as contextual compressor.")
-        return compressor, "llm_chain_extractor"
-
-    logger.info("Using reranker as contextual compressor.")
-    return reranker, "reranker"
-
-
-
 def build_retriever(vectorstore, llm=None, reranker=None):
     """
     Create and return the configured retriever, optionally wrapped with contextual compression.
@@ -431,7 +411,6 @@ def build_retriever(vectorstore, llm=None, reranker=None):
             search_kwargs={
                 "k": fetch_k,
                 "fetch_k": 20,
-                "lambda_mult": 0.5,
             },
         )
     elif search_method == "bm25":
@@ -466,12 +445,13 @@ def build_retriever(vectorstore, llm=None, reranker=None):
         )
 
     if enable_rerank:
-        compressor, compressor_name = _build_contextual_compressor(llm=llm, reranker=reranker)
+        _ = llm
+        compressor = reranker
         if compressor is None:
             logger.warning("Rerank enabled but no compressor is available; proceeding without compression.")
             return retriever
 
-        logger.info("Reranker enabled: %s, compressor: %s", enable_rerank, compressor_name)
+        logger.info("Reranker enabled: %s, compressor: %s", enable_rerank, "reranker")
         return ContextualCompressionRetriever(
             base_compressor=compressor,
             base_retriever=retriever,
