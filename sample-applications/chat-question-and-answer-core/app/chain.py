@@ -343,7 +343,14 @@ async def process_query(chain=None, chain_input=None):
     if chain_input is None:
         chain_input = {"question": "", "history": ""}
 
+    import time
+    _start = time.perf_counter()
+    _ttft_logged = False
+
     async for chunk in chain.astream(chain_input):
+        if not _ttft_logged and chunk:
+            logger.info("TTFT: %.3f seconds", time.perf_counter() - _start)
+            _ttft_logged = True
         yield f"data: {chunk}\n\n"
 
 

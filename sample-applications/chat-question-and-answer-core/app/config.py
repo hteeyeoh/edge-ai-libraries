@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     LLM_DEVICE: str = "CPU"
     MAX_TOKENS: int = 1024
     ENABLE_LLM_CONDENSE_QUESTION: bool = True
+    CHUNKING_STRATEGY: str = "recursive"
     CHUNK_SIZE: int = 400
     CHUNK_OVERLAP: int = 200
     CONTEXT_WINDOW_NEIGHBORS: int = 0

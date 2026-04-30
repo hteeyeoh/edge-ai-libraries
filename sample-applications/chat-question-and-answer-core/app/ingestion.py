@@ -1,7 +1,8 @@
 from .config import config
 from .logger import logger
+from .chunking import get_chunker
 from langchain_core.documents import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
+from langchain_text_splitters import MarkdownHeaderTextSplitter
 
 
 def _is_markdown_file(file_path) -> bool:
@@ -39,8 +40,9 @@ def _split_markdown_by_headers(docs):
     return split_docs
 
 
-def _split_text_to_indexed_chunks(docs, chunk_size: int, chunk_overlap: int):
-    splitter = RecursiveCharacterTextSplitter(
+def _split_text_to_indexed_chunks(docs, chunk_size: int, chunk_overlap: int, chunking_strategy: str = "recursive"):
+    splitter = get_chunker(
+        strategy=chunking_strategy,
         chunk_size=max(50, int(chunk_size)),
         chunk_overlap=max(0, int(chunk_overlap)),
     )
@@ -115,6 +117,7 @@ def split_documents_for_ingestion(
     chunk_overlap: int,
     file_path=None,
     embedding_model=None,
+    chunking_strategy: str = None,
 ):
     """
     Split source docs into sequential, indexed chunks for context-window retrieval.
@@ -123,28 +126,44 @@ def split_documents_for_ingestion(
     1) Chunk each document with overlap.
     2) Store chunk index metadata.
     3) Enrich retrieval later by fetching neighboring indices.
+
+    Args:
+        docs: List of LangChain Document objects to split.
+        chunk_size: Target chunk size in characters (or tokens for "token" strategy).
+        chunk_overlap: Overlap between consecutive chunks.
+        file_path: Source file path (used for logging only).
+        embedding_model: Unused; kept for backward-compatible caller signature.
+        chunking_strategy: Chunking strategy name. If None, falls back to
+            ``config.CHUNKING_STRATEGY``. Supported values: recursive, fixed,
+            token, section.
     """
 
     # Unused in this strategy, kept for backward compatibility with caller signature.
     _ = embedding_model
 
-    logger.info("Ingestion mode: indexed sequential chunking (file=%s)", file_path)
+    strategy = chunking_strategy if chunking_strategy is not None else config.CHUNKING_STRATEGY
+
+    logger.info(
+        "Ingestion mode: indexed sequential chunking (strategy=%s, file=%s)",
+        strategy,
+        file_path,
+    )
 
     indexed_chunk_size = max(50, int(chunk_size))
     indexed_chunk_overlap = max(0, min(int(chunk_overlap), indexed_chunk_size // 2))
 
-    docs_to_chunk = docs
     if _is_markdown_file(file_path):
         logger.info("Applying MarkdownHeaderTextSplitter with aisle-level chunking.")
-        docs_to_chunk = _split_markdown_by_headers(docs)
+        presplit_docs = _split_markdown_by_headers(docs)
         return _index_presplit_docs(
-            docs_to_chunk,
+            presplit_docs,
             chunk_size=indexed_chunk_size,
             chunk_overlap=indexed_chunk_overlap,
         )
 
     return _split_text_to_indexed_chunks(
-        docs_to_chunk,
+        docs,
         chunk_size=indexed_chunk_size,
         chunk_overlap=indexed_chunk_overlap,
+        chunking_strategy=strategy,
     )

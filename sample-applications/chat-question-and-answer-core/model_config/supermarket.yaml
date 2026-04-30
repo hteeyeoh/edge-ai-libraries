@@ -58,6 +58,10 @@ device_settings:
   LLM_DEVICE: "CPU"
 
 ingestion_settings:
+  # Chunking strategy for splitting documents.
+  # Options: "recursive" (default, general prose), "fixed" (uniform dense text),
+  #          "token" (LLM-token-aware), "section" (splits on ━━━/════/## headers — best for structured store docs)
+  CHUNKING_STRATEGY: "section"
   # Base chunking used for semantic retrieval.
   CHUNK_SIZE: 1200
   CHUNK_OVERLAP: 200
@@ -80,9 +84,9 @@ retrieval_settings:
   # Lower value increases recall, higher value increases precision.
   SIMILARITY_SCORE_THRESHOLD: 0.35
   # Number of neighboring chunks to include before and after each retrieved seed chunk.
-  CONTEXT_WINDOW_NEIGHBORS: 3
+  CONTEXT_WINDOW_NEIGHBORS: 0
   # Enable the LLM to condense the user's question before retrieval, which can improve retrieval relevance for long or complex questions.
-  ENABLE_LLM_CONDENSE_QUESTION: True
+  ENABLE_LLM_CONDENSE_QUESTION: False
 
 # Notes:
 # - Ensure all model IDs are valid and accessible.
