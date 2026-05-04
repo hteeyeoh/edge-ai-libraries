@@ -16,18 +16,19 @@ model_settings:
 
   # Large Language Model (LLM) used to generate responses.
   # Example: "microsoft/Phi-3.5-mini-instruct"
-  LLM_MODEL_ID: "Intel/neural-chat-7b-v3-3"
+  LLM_MODEL_ID: "Qwen/Qwen2.5-7B-Instruct"
 
   # Prompt template used by the assistant to generate answers.
   # Ensure placeholders like {history}, {context} and {question} are preserved.
   # Optional: Adjust the template to match your model's requirements.
   #           If did not provde, will use the default template defined in the application.
   PROMPT_TEMPLATE: >
-    ### System:
+    <|im_start|>
+    System:
     You are the "MegaRetail Navigator," a helpful, efficient store assistant.
     Your goal is to guide customers to products and explain store policies accurately.
 
-    ### Rules for your response:
+    Rules for your response:
     1. **Context is Supreme:** If the Conversation History contradicts the provided Context, ALWAYS follow the Context. The Context contains the most up-to-date store shelf information.
     2. **Strict Grounding:** Answer ONLY using the provided context.
     3. **Paragraph Format:** Provide your answer as a single, cohesive paragraph (maximum 3-4 sentences). Do NOT use bullet points, bold headers, or lists.
@@ -36,16 +37,20 @@ model_settings:
     5. **Ambiguity:** If the user asks for a broad category (e.g., "Apples"), briefly list the varieties available in the context.
     5. **Fallback:** If the answer is not in the context, say: "I'm sorry, I couldn't find that specific item in our digital directory. Please visit our **Customer Service Desk (Ground Floor, North Gate)** for further assistance."
 
-    ### Conversation History:
+    Conversation History:
     {history}
 
-    ### Context:
+    Context:
     {context}
+    <|im_end|>
 
-    ### User Question:
+    <|im_start|>
+    User Question:
     {question}
+    <|im_end|>
 
-    ### Assistant:
+    <|im_start|>
+    Assistant:
 
   # Optional: Maximum number of tokens in the model's response.
   # Maximum token 1024. Not exceeding this limit to avoid errors.
@@ -55,12 +60,13 @@ device_settings:
   # Specify the device for each model. Options: "CPU", "GPU"
   EMBEDDING_DEVICE: "CPU"
   RERANKER_DEVICE: "CPU"
-  LLM_DEVICE: "CPU"
+  LLM_DEVICE: "GPU"
 
 ingestion_settings:
   # Chunking strategy for splitting documents.
   # Options: "recursive" (default, general prose), "fixed" (uniform dense text),
-  #          "token" (LLM-token-aware), "section" (splits on ━━━/════/## headers — best for structured store docs)
+  #          "token" (LLM-token-aware), "section" (splits on ━━━/════/## headers — best for structured store docs),
+  #          "semantic" (semantic similarity based on the embeddings)
   CHUNKING_STRATEGY: "section"
   # Base chunking used for semantic retrieval.
   CHUNK_SIZE: 1200
@@ -86,7 +92,7 @@ retrieval_settings:
   # Number of neighboring chunks to include before and after each retrieved seed chunk.
   CONTEXT_WINDOW_NEIGHBORS: 0
   # Enable the LLM to condense the user's question before retrieval, which can improve retrieval relevance for long or complex questions.
-  ENABLE_LLM_CONDENSE_QUESTION: False
+  ENABLE_LLM_CONDENSE_QUESTION: True
 
 # Notes:
 # - Ensure all model IDs are valid and accessible.
