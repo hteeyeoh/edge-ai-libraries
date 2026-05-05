@@ -172,7 +172,8 @@ class OpenVINOBackend:
         """
 
         # Login to HuggingFace
-        self.login_to_huggingface(self.huggingface_token)
+        if not config.HF_HUB_OFFLINE:
+            self.login_to_huggingface(self.huggingface_token)
 
         # Download embedding, LLM, and reranker models from HuggingFace
         if config.USE_VDMS is False:

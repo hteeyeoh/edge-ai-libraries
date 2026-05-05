@@ -31,6 +31,7 @@ class Settings(BaseSettings):
         LLM_DEVICE (str): Device for LLM ('CPU', etc.).
         MAX_TOKENS (int): Maximum number of tokens for LLM responses.
         KEEP_ALIVE (Union[str, int, None]): Keep-alive setting for the application.
+        HF_HUB_OFFLINE (bool): Enable/disable huggingface offline mode.
 
     Private Attributes:
         _ENABLE_RERANK (bool): Whether reranking is enabled.
@@ -67,6 +68,7 @@ class Settings(BaseSettings):
     LLM_DEVICE: str = "CPU"
     MAX_TOKENS: int = 1024
     KEEP_ALIVE: Union[str, int, None] = None
+    HF_HUB_OFFLINE: bool = False
 
     # VDMS
     USE_VDMS: bool = False
