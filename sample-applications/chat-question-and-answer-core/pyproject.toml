@@ -26,6 +26,7 @@ uvicorn = ">=0.21.0,<0.23.0"
 huggingface_hub = "0.34.4"
 langchain-huggingface = "1.2.1"
 optimum = {extras = ["openvino", "nncf"], version = "2.1.0"}
+openvino-genai = "2026.1.0.0"
 
 [tool.poetry.group.ollama.dependencies]
 langchain-ollama = "1.0.1"

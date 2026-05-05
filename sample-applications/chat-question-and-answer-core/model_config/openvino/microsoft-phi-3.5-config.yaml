@@ -24,6 +24,6 @@ model_settings:
     <|assistant|>
     Answer:
 device_settings:
-  EMBEDDING_DEVICE: "CPU"
-  RERANKER_DEVICE: "CPU"
-  LLM_DEVICE: "CPU"
+  EMBEDDING_DEVICE: "NPU"
+  RERANKER_DEVICE: "NPU"
+  LLM_DEVICE: "NPU"

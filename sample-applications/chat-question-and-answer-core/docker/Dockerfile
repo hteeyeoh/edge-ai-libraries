@@ -4,6 +4,7 @@ FROM python:3.11-slim AS python-base
 
 # Define a build-time variable to determine if GPU drivers should be installed
 ARG USE_GPU=false
+ARG USE_NPU=false
 ARG INSTALL_DRIVER_VERSION="25.48.36300"
 ARG UID=1000
 ARG GID=1000
@@ -14,7 +15,7 @@ RUN echo "USE_GPU is set to $USE_GPU"
 COPY ./drivers/install_gpu_drivers.sh /tmp/drivers/install_gpu_drivers.sh
 RUN chmod +x /tmp/drivers/install_gpu_drivers.sh
 
-# Install GPU drivers if required
+# Install GPU drivers when USE_GPU is set to true
 RUN if [ "$USE_GPU" = "true" ]; then \
     echo "Installing GPU drivers version $INSTALL_DRIVER_VERSION"; \
     apt-get update && apt-get install -y --no-install-recommends ca-certificates libxml2; \
@@ -24,6 +25,19 @@ RUN if [ "$USE_GPU" = "true" ]; then \
     apt-get clean && \
     rm -rf /tmp/drivers /var/lib/apt/lists/* /tmp/*; \
     fi
+
+# Install NPU drivers when USE_NPU is set to true
+RUN if [ "$USE_NPU" = "true" ]; then \
+    echo "Installing NPU drivers"; \
+    apt-get update && apt-get install -y --no-install-recommends curl ca-certificates libxml2 libtbb12; \
+    mkdir /tmp/npu_deps && cd /tmp/npu_deps ; \
+    curl -L -O https://github.com/intel/linux-npu-driver/releases/download/v1.28.0/linux-npu-driver-v1.28.0.20251218-20347000698-ubuntu2404.tar.gz && \
+    tar -xf linux-npu-driver-v1.28.0.20251218-20347000698-ubuntu2404.tar.gz && \
+    curl -L -O https://github.com/oneapi-src/level-zero/releases/download/v1.24.2/level-zero_1.24.2+u24.04_amd64.deb ; \
+    dpkg -i ./*.deb && rm -Rf /tmp/npu_deps ; \
+    fi; \
+    apt-get clean ; \
+    rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
 
 # Setting env vars for python, pip and poetry
 ENV PYTHONUNBUFFERED=1 \
