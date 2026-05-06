@@ -242,7 +242,7 @@ class Evaluator:
         with torch.no_grad():
             logits = self.nli_model(**inputs).logits
         probs = torch.softmax(logits, dim=1)[0]
-        
+
         # Find indices for each label
         entailment_idx = next(
             (idx for idx, lbl in self.nli_model.config.id2label.items() if lbl.lower() == "entailment"),
@@ -256,7 +256,7 @@ class Evaluator:
             (idx for idx, lbl in self.nli_model.config.id2label.items() if lbl.lower() == "contradiction"),
             None
         )
-        
+
         return {
             "entailment": round(float(probs[entailment_idx].item()), 4) if entailment_idx is not None else 0.0,
             "neutral": round(float(probs[neutral_idx].item()), 4) if neutral_idx is not None else 0.0,
@@ -409,67 +409,71 @@ class Evaluator:
         }
 
 
-    def _compute_menli_score(self, generated: str = "", reference: str = "") -> float:
+    def _compute_menli_score(self, generated: str = "", reference: str = "") -> Dict[str, float]:
         """
         Compute MENLI score using E - N - 2C formula with bidirectional sentence-level scoring.
-        
+
         M1 (S→G / Precision): For each sentence in generated, find best match in reference,
                               calculate E - N - 2C, then average across all sentences.
         M2 (G→S / Recall): For each sentence in reference, find best match in generated,
                            calculate E - N - 2C, then average across all sentences.
         MENLI = (M1 + M2) / 2
-        
+
         Args:
             generated (str): The generated summary text.
             reference (str): The reference summary text.
-            
+
         Returns:
-            float: MENLI score
+            dict: Dictionary containing m1, m2, and menli_score values.
         """
         gen_sentences = sent_tokenize(generated)
         ref_sentences = sent_tokenize(reference)
-        
+
         # M1: Generated → Reference (Precision)
         m1_scores = []
         if len(gen_sentences) > 0 and len(ref_sentences) > 0:
             ref_embeddings = self.sentence_model.encode(ref_sentences, convert_to_tensor=True)
-            
+
             for gen_sentence in gen_sentences:
                 gen_embedding = self.sentence_model.encode(gen_sentence, convert_to_tensor=True)
                 cosine_scores = util.cos_sim(gen_embedding, ref_embeddings)[0]
                 best_match_idx = torch.argmax(cosine_scores).item()
                 best_match_sentence = ref_sentences[best_match_idx]
-                
+
                 # Get E, N, C probabilities (generated as hypothesis, reference as premise)
                 probs = self._calculate_nli_entailment_score(premise=best_match_sentence, hypothesis=gen_sentence)
                 # Calculate E - N - 2C
                 score = probs["entailment"] - probs["neutral"] - 2 * probs["contradiction"]
                 m1_scores.append(score)
-        
+
         # M2: Reference → Generated (Recall)
         m2_scores = []
         if len(ref_sentences) > 0 and len(gen_sentences) > 0:
             gen_embeddings = self.sentence_model.encode(gen_sentences, convert_to_tensor=True)
-            
+
             for ref_sentence in ref_sentences:
                 ref_embedding = self.sentence_model.encode(ref_sentence, convert_to_tensor=True)
                 cosine_scores = util.cos_sim(ref_embedding, gen_embeddings)[0]
                 best_match_idx = torch.argmax(cosine_scores).item()
                 best_match_sentence = gen_sentences[best_match_idx]
-                
+
                 # Get E, N, C probabilities (reference as premise, generated as hypothesis)
                 probs = self._calculate_nli_entailment_score(premise=ref_sentence, hypothesis=best_match_sentence)
                 # Calculate E - N - 2C
                 score = probs["entailment"] - probs["neutral"] - 2 * probs["contradiction"]
                 m2_scores.append(score)
-        
+
         # Calculate averages
         m1 = sum(m1_scores) / len(m1_scores) if len(m1_scores) > 0 else 0.0
         m2 = sum(m2_scores) / len(m2_scores) if len(m2_scores) > 0 else 0.0
-        
+
         # Final MENLI score
         menli_score = (m1 + m2) / 2
-        return round(menli_score, 4)
+        return {
+            "m1": round(m1, 4),
+            "m2": round(m2, 4),
+            "menli_score": round(menli_score, 4),
+        }
 
 
     def _evaluate_summaries(self, reference: str="", generated: str="") -> list[Dict[str, Any]]:
@@ -580,7 +584,7 @@ class Evaluator:
         # M1 (S→G / precision): for each generated sentence, find best match in reference
         # M2 (G→S / recall): for each reference sentence, find best match in generated
         # MENLI = (M1 + M2) / 2
-        menli_score = self._compute_menli_score(generated, reference)
+        menli_result = self._compute_menli_score(generated, reference)
 
         results.append({
             "Temporal Coherence Summary": temporal_coherence_score
@@ -597,7 +601,9 @@ class Evaluator:
                 {"Metric": "neutral_ratio",              "Value": stats_rg["neutral_ratio"]},
                 {"Metric": "contradiction_ratio",        "Value": stats_rg["contradiction_ratio"]},
                 {"Metric": "average_cosine_score",       "Value": f"{stats_rg['average_cosine_score']}/1.0"},
-                {"Metric": "MENLI_Score",                "Value": menli_score},
+                {"Metric": "Reference → Generated",         "Value": menli_result["m1"]},
+                {"Metric": "Generated → Reference",         "Value": menli_result["m2"]},
+                {"Metric": "MENLI_Score",                "Value": menli_result["menli_score"]},
             ]
         })
 
