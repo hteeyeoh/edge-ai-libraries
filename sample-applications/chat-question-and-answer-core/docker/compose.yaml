@@ -1,10 +1,10 @@
-x-nginx-common: &nginx-common
-  image: nginxinc/nginx-unprivileged:1.29.5
-  container_name: chatqna-core-nginx
-  ports:
-    - "8102:8102"
-  volumes:
-    - ../nginx_config/nginx.conf:/etc/nginx/nginx.conf:ro
+# x-nginx-common: &nginx-common
+#   image: nginxinc/nginx-unprivileged:1.29.5
+#   container_name: chatqna-core-nginx
+#   ports:
+#     - "8102:8102"
+#   volumes:
+#     - ../nginx_config/nginx.conf:/etc/nginx/nginx.conf:ro
 
 x-chatqna-core-common: &chatqna-core-common
   image: ${REGISTRY:-}chatqna:${BACKEND_TAG:-latest}
@@ -25,29 +25,29 @@ x-chatqna-core-common: &chatqna-core-common
     - ${USER_GROUP_ID-1000}
 
 services:
-  nginx-default:
-    <<: *nginx-common
-    profiles:
-      - OPENVINO
-    depends_on:
-      - chatqna-core-ov-cpu
-      - chatqna-core-ui
+  # nginx-default:
+  #   <<: *nginx-common
+  #   profiles:
+  #     - OPENVINO
+  #   depends_on:
+  #     - chatqna-core-ov-cpu
+  #     - chatqna-core-ui
 
-  nginx-gpu:
-    <<: *nginx-common
-    profiles:
-      - OPENVINO-GPU
-    depends_on:
-      - chatqna-core-ov-gpu
-      - chatqna-core-ui
+  # nginx-gpu:
+  #   <<: *nginx-common
+  #   profiles:
+  #     - OPENVINO-GPU
+  #   depends_on:
+  #     - chatqna-core-ov-gpu
+  #     - chatqna-core-ui
 
-  nginx-ollama:
-    <<: *nginx-common
-    profiles:
-      - OLLAMA
-    depends_on:
-      - chatqna-core-ollama
-      - chatqna-core-ui
+  # nginx-ollama:
+  #   <<: *nginx-common
+  #   profiles:
+  #     - OLLAMA
+  #   depends_on:
+  #     - chatqna-core-ollama
+  #     - chatqna-core-ui
 
   chatqna-core-ov-cpu:
     <<: *chatqna-core-common
