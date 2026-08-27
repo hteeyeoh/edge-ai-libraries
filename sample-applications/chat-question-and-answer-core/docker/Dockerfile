@@ -25,6 +25,25 @@ RUN if [ "$USE_GPU" = "true" ]; then \
     rm -rf /tmp/drivers /var/lib/apt/lists/* /tmp/*; \
     fi
 
+# Install the Intel NPU user-space stack: the NPU
+# driver/compiler/firmware plus the oneAPI Level Zero loader (libze1). The
+# loader is mandatory — without libze_loader.so.1 the NPU plugin cannot
+# enumerate the device. The final test fails the build if it is missing.
+ARG NPU_DRIVER_VERSION="1.35.0"
+ARG NPU_DRIVER_BUILD="v1.35.0.20260722-29947505341-ubuntu2404"
+ARG LEVEL_ZERO_VERSION="1.28.2-1~24.04~ppa1"
+ARG LEVEL_ZERO_PPA_SNAPSHOT="20260606T100000Z"
+
+RUN mkdir -p /tmp/npu_deps && cd /tmp/npu_deps \
+    && apt-get update && apt-get install -y --no-install-recommends curl ca-certificates libtbb12 \
+    && curl -L --retry 5 --retry-delay 5 --retry-all-errors -O https://github.com/intel/linux-npu-driver/releases/download/v${NPU_DRIVER_VERSION}/linux-npu-driver-${NPU_DRIVER_BUILD}.tar.gz \
+    && tar -xf linux-npu-driver-${NPU_DRIVER_BUILD}.tar.gz \
+    && curl -L --retry 5 --retry-delay 5 --retry-all-errors -O https://snapshot.ppa.launchpadcontent.net/kobuk-team/intel-graphics/ubuntu/${LEVEL_ZERO_PPA_SNAPSHOT}/pool/main/l/level-zero-loader/libze1_${LEVEL_ZERO_VERSION}_amd64.deb \
+    && dpkg -i ./*.deb \
+    && ldconfig \
+    && test -e /usr/lib/x86_64-linux-gnu/libze_loader.so.1 \
+    && rm -rf /tmp/npu_deps /var/lib/apt/lists/*
+
 # Setting env vars for python and pip
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
